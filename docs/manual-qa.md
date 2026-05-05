@@ -49,6 +49,17 @@ multipass exec trade-in-agent-openclaw-dev -- sudo systemctl is-active trade-in-
 multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
 ```
 
+If `agent-tui` reports `Pairing required`, list and approve the pending request as the `openclaw` user:
+
+```bash
+multipass shell trade-in-agent-openclaw-dev
+sudo -u openclaw -H env HOME=/home/openclaw openclaw devices list
+sudo -u openclaw -H env HOME=/home/openclaw openclaw devices approve <requestId>
+agent-tui
+```
+
+If approval itself triggers a scope-upgrade request, rerun `openclaw devices list` and approve the newest request id.
+
 ### 1. Bootstrap VM
 
 ```bash
