@@ -75,6 +75,19 @@ The app service should be designed so it can run both:
 8. Sidecar API contract for OpenClaw agent calls.
 9. Milestone documentation for both local lanes.
 
+## Phase One Coverage Map
+
+Milestone One intentionally covers every step from the Phase 1 Local Foundations section of the implementation plan.
+
+| Phase 1 step | Milestone One coverage |
+|---|---|
+| Initialize app service | Repo-local app service skeleton, host bootstrap, Multipass bootstrap, and dev script. |
+| Add workflow DB schema | Postgres schema, migrations, and seed data. |
+| Add checklist definitions for combines and high-horsepower tractors | Checklist definition files/tables for both initial unit types. |
+| Add case CRUD endpoints | Trade-case create, read, list, update, and archive/delete endpoints. |
+| Add packet generator | Draft packet generator endpoint and smoke-test assertion. |
+| Add basic health endpoint | `GET /health` in host and Multipass smoke tests. |
+
 ## Target Repository Structure
 
 ```text
@@ -115,7 +128,10 @@ Required endpoints:
 
 - `GET /health`
 - `POST /trade-cases`
+- `GET /trade-cases`
 - `GET /trade-cases/:id`
+- `PATCH /trade-cases/:id`
+- `DELETE /trade-cases/:id` or `POST /trade-cases/:id/archive`
 - `POST /trade-cases/:id/evidence`
 - `GET /trade-cases/:id/checklist`
 - `POST /trade-cases/:id/packet`
@@ -123,9 +139,12 @@ Required endpoints:
 Required behavior:
 
 - create a trade case
+- list and fetch trade cases
+- update trade case and machine identity fields
+- archive or delete a draft trade case
 - store machine identity fields
 - register evidence metadata
-- compute checklist completeness for combines
+- compute checklist completeness for combines and high-horsepower tractors
 - generate a draft packet from stored data
 - persist everything in Postgres
 
