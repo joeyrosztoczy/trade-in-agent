@@ -59,7 +59,7 @@ export async function analyzeEvidenceMedia({ evidence, tradeCase, request = {} }
     throw error;
   }
 
-  const model = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-5-mini';
+  const model = selectVisionModel(request);
   const media = resolveMediaInputs(request, evidence);
   const content = [
     {
@@ -113,6 +113,21 @@ export async function analyzeEvidenceMedia({ evidence, tradeCase, request = {} }
     normalized: normalizeModelOutput(extractOutputText(raw), evidence),
     rawResponse: raw
   };
+}
+
+export function selectVisionModel(request = {}) {
+  const defaultModel = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-5.4-mini';
+  const reviewModel = process.env.OPENAI_VISION_REVIEW_MODEL || 'gpt-5.4';
+  const requestedModel = request.model || request.openaiModel;
+  if (requestedModel) return requestedModel;
+
+  const analysisMode = String(request.analysisMode || request.analysis_mode || '').toLowerCase();
+  const escalationRequested = request.escalate === true ||
+    request.useReviewModel === true ||
+    request.highRisk === true ||
+    ['review', 'review_grade', 'high_risk', 'escalation', 'technician_escalation'].includes(analysisMode);
+
+  return escalationRequested ? reviewModel : defaultModel;
 }
 
 function buildPrompt({ evidence, tradeCase, request }) {

@@ -45,6 +45,18 @@ POST /trade-cases/:id/evidence/:evidenceId/analyze
 
 The sidecar sends photos or sampled video frames to the OpenAI API when `OPENAI_API_KEY` is configured. In local fixture mode it returns deterministic analysis for QA.
 
+Default model policy:
+
+- routine field evidence analysis uses `OPENAI_VISION_MODEL`, defaulting to `gpt-5.4-mini`
+- high-risk or reviewer-grade analysis uses `OPENAI_VISION_REVIEW_MODEL`, defaulting to `gpt-5.4`
+
+To request the review model, set one of:
+
+- `"analysisMode": "high_risk"`
+- `"analysisMode": "review_grade"`
+- `"escalate": true`
+- `"useReviewModel": true`
+
 For video, pass representative frame image URIs in `sampledFrames`:
 
 ```json

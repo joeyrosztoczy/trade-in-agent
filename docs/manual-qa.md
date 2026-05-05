@@ -204,6 +204,13 @@ multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in
 
 When bootstrapping through `scripts/bootstrap-openclaw-multipass.sh`, the sidecar automatically uses the `OPENAI_API_KEY` from the selected OpenClaw deployment secrets file when it is present. For the Stotz corporate sales deployment, that means the sidecar and OpenClaw usage are tracked against the same OpenAI key.
 
+The model policy is:
+
+- `OPENAI_VISION_MODEL=gpt-5.4-mini` for routine field evidence analysis
+- `OPENAI_VISION_REVIEW_MODEL=gpt-5.4` for high-risk or reviewer-grade analysis
+
+Use the review model by passing `analysisMode: "high_risk"`, `analysisMode: "review_grade"`, `escalate: true`, or `useReviewModel: true` to the evidence analysis endpoint.
+
 Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path when deployment secrets are unavailable.
 
 ## Host QA Path

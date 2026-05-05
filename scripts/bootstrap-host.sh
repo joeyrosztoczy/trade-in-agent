@@ -9,7 +9,8 @@ if [[ ! -f .env ]]; then
   echo "Created .env from infra/local/env.example"
 fi
 grep -q '^OPENAI_VISION_MODE=' .env || echo 'OPENAI_VISION_MODE=fixture' >> .env
-grep -q '^OPENAI_VISION_MODEL=' .env || echo 'OPENAI_VISION_MODEL=gpt-5-mini' >> .env
+grep -q '^OPENAI_VISION_MODEL=' .env || echo 'OPENAI_VISION_MODEL=gpt-5.4-mini' >> .env
+grep -q '^OPENAI_VISION_REVIEW_MODEL=' .env || echo 'OPENAI_VISION_REVIEW_MODEL=gpt-5.4' >> .env
 
 set -a
 # shellcheck disable=SC1091

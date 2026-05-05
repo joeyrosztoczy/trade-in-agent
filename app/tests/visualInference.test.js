@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeEvidenceMedia } from '../src/visualInference.js';
+import { analyzeEvidenceMedia, selectVisionModel } from '../src/visualInference.js';
 
 test('fixture visual inference returns normalized field guidance', async () => {
   process.env.OPENAI_VISION_MODE = 'fixture';
@@ -66,4 +66,25 @@ test('fixture visual inference accepts sampled video frame requests', async () =
 
   assert.equal(result.normalized.analysisStatus, 'complete');
   assert.equal(result.normalized.checklistSlot, 'startup_video');
+});
+
+test('vision model selection defaults to mini and escalates for high-risk review', () => {
+  delete process.env.OPENAI_VISION_MODEL;
+  delete process.env.OPENAI_VISION_REVIEW_MODEL;
+
+  assert.equal(selectVisionModel({ analysisMode: 'field_evidence_quality' }), 'gpt-5.4-mini');
+  assert.equal(selectVisionModel({ analysisMode: 'high_risk' }), 'gpt-5.4');
+  assert.equal(selectVisionModel({ useReviewModel: true }), 'gpt-5.4');
+  assert.equal(selectVisionModel({ model: 'custom-model' }), 'custom-model');
+});
+
+test('vision model selection honors configured defaults', () => {
+  process.env.OPENAI_VISION_MODEL = 'default-test-model';
+  process.env.OPENAI_VISION_REVIEW_MODEL = 'review-test-model';
+
+  assert.equal(selectVisionModel({}), 'default-test-model');
+  assert.equal(selectVisionModel({ escalate: true }), 'review-test-model');
+
+  delete process.env.OPENAI_VISION_MODEL;
+  delete process.env.OPENAI_VISION_REVIEW_MODEL;
 });

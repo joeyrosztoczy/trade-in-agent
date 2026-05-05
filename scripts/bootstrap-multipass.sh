@@ -37,7 +37,8 @@ sudo -u postgres psql -tc \"SELECT 1 FROM pg_database WHERE datname='trade_in_ag
 cd '$REMOTE_DIR'
 cp -n infra/local/env.example .env || true
 grep -q '^OPENAI_VISION_MODE=' .env || echo 'OPENAI_VISION_MODE=fixture' >> .env
-grep -q '^OPENAI_VISION_MODEL=' .env || echo 'OPENAI_VISION_MODEL=gpt-5-mini' >> .env
+grep -q '^OPENAI_VISION_MODEL=' .env || echo 'OPENAI_VISION_MODEL=gpt-5.4-mini' >> .env
+grep -q '^OPENAI_VISION_REVIEW_MODEL=' .env || echo 'OPENAI_VISION_REVIEW_MODEL=gpt-5.4' >> .env
 cd app
 npm install
 npm run migrate
