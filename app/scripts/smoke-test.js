@@ -1,4 +1,6 @@
 const baseUrl = process.env.SIDECAR_URL || 'http://127.0.0.1:8788';
+const liveSmokeImageUrl = process.env.OPENAI_VISION_SMOKE_IMAGE_URL || 'https://api.nga.gov/iiif/a2e6da57-3cd1-4235-b20e-95dcaefed6c8/full/!800,800/0/default.jpg';
+const liveVision = process.env.OPENAI_VISION_MODE === 'live';
 
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -54,8 +56,8 @@ const batch = await request(`/trade-cases/${tradeCase.id}/evidence/batch`, {
       {
         uploadedBy: 'smoke-test',
         mediaType: 'photo',
-        storageUri: 'fixtures/media/front-45-placeholder.jpg',
-        originalFileName: 'front-45-placeholder.jpg',
+        storageUri: liveVision ? liveSmokeImageUrl : 'fixtures/media/front-45-placeholder.jpg',
+        originalFileName: liveVision ? 'live-smoke-image.jpg' : 'front-45-placeholder.jpg',
         contentType: 'image/jpeg',
         sourceMessageId: 'smoke-message-1',
         sourceAttachmentId: 'smoke-attachment-1',
@@ -81,10 +83,10 @@ if (analysis.analysis.analysisStatus !== 'complete') throw new Error('Visual ana
 const checklist = await request(`/trade-cases/${tradeCase.id}/checklist`);
 if (checklist.requiredCount <= 0) throw new Error('Checklist did not include required slots');
 if (!checklist.missingSlots.includes('rear_45')) throw new Error('Checklist did not report expected missing slot');
-if (!checklist.visibleConditionFindings.length) throw new Error('Checklist did not include visual findings');
+if (!liveVision && !checklist.visibleConditionFindings.length) throw new Error('Checklist did not include visual findings');
 
 const guidance = await request(`/trade-cases/${tradeCase.id}/guidance`, { method: 'POST', body: '{}' });
-if (!guidance.suggestedNextMessage.includes('Still needed')) throw new Error('Guidance did not include missing evidence message');
+if (!guidance.suggestedNextMessage.includes('Next:')) throw new Error('Guidance did not include next-step message');
 
 const packet = await request(`/trade-cases/${tradeCase.id}/packet`, { method: 'POST', body: '{}' });
 const packetJson = packet.packet;

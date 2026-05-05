@@ -202,7 +202,9 @@ multipass exec trade-in-agent-openclaw-dev -- sudo systemctl restart trade-in-ag
 multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
 ```
 
-Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path.
+When bootstrapping through `scripts/bootstrap-openclaw-multipass.sh`, the sidecar automatically uses the `OPENAI_API_KEY` from the selected OpenClaw deployment secrets file when it is present. For the Stotz corporate sales deployment, that means the sidecar and OpenClaw usage are tracked against the same OpenAI key.
+
+Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path when deployment secrets are unavailable.
 
 ## Host QA Path
 

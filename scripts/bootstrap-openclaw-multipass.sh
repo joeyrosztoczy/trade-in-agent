@@ -24,6 +24,8 @@ if [[ ! -x "$OPENCLAW_AZURE_REPO/scripts/local/qa.sh" ]]; then
   exit 1
 fi
 
+command -v jq >/dev/null || { echo "ERROR: jq is required"; exit 1; }
+
 echo "Bootstrapping OpenClaw deployment into Multipass VM '$VM_NAME'..."
 echo "  OpenClaw Azure repo: $OPENCLAW_AZURE_REPO"
 echo "  Deployment plan: $OPENCLAW_DEPLOYMENT_PLAN"
@@ -48,6 +50,35 @@ fi
 
 echo "OpenClaw local deployment is ready. Installing trade-in sidecar onto the same VM..."
 VM_NAME="$VM_NAME" "$ROOT/scripts/bootstrap-multipass.sh"
+
+PLAN_PATH="$OPENCLAW_DEPLOYMENT_PLAN"
+if [[ ! -f "$PLAN_PATH" ]]; then
+  PLAN_PATH="$OPENCLAW_AZURE_REPO/$OPENCLAW_DEPLOYMENT_PLAN"
+fi
+SECRETS_FILE="$(jq -r '.secretsFile // empty' "$PLAN_PATH")"
+if [[ -n "$SECRETS_FILE" && ! -f "$SECRETS_FILE" ]]; then
+  SECRETS_FILE="$OPENCLAW_AZURE_REPO/$SECRETS_FILE"
+fi
+if [[ -f "$SECRETS_FILE" ]] && jq -e '.OPENAI_API_KEY? // empty' "$SECRETS_FILE" >/dev/null; then
+  OPENAI_API_KEY_VALUE="$(jq -r '.OPENAI_API_KEY' "$SECRETS_FILE")"
+  echo "Configuring sidecar OpenAI key from OpenClaw deployment secrets."
+  OPENAI_API_KEY_VALUE="$OPENAI_API_KEY_VALUE" multipass exec "$VM_NAME" -- bash -lc '
+    set -euo pipefail
+    cd /home/ubuntu/trade-in-agent
+    touch .env
+    tmp="$(mktemp)"
+    grep -v -E "^(OPENAI_API_KEY|OPENAI_VISION_MODE)=" .env > "$tmp" || true
+    {
+      cat "$tmp"
+      printf "OPENAI_API_KEY=%s\n" "$OPENAI_API_KEY_VALUE"
+      printf "OPENAI_VISION_MODE=live\n"
+    } > .env
+    rm -f "$tmp"
+    sudo systemctl restart trade-in-agent-sidecar.service
+  '
+else
+  echo "OpenClaw deployment secrets did not contain OPENAI_API_KEY; leaving sidecar in configured vision mode."
+fi
 
 echo "OpenClaw + trade-in sidecar bootstrap complete for $VM_NAME."
 echo "Validate OpenClaw:"
