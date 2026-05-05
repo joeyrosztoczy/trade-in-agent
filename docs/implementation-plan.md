@@ -424,6 +424,8 @@ Likely responsibilities:
 - Let agent respond with accepted/missing/retake guidance while the sales rep is still in the field.
 - Generate a draft packet from structured state and visual findings.
 
+Milestone 2.5, [Live Teams Attachment Bridge](milestone-two-live-teams-attachment-bridge.md), closes the live deployment gap between "Teams/OpenClaw received an upload" and "the sidecar resolved that exact upload as analyzable evidence."
+
 ### Phase 3: Analysis and Routing
 
 - Add evidence quality analysis prompts.

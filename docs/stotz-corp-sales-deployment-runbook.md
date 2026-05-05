@@ -247,6 +247,33 @@ ssh -F "$SSH_CONFIG" "$SSH_HOST" \
   'sudo journalctl -u openclaw-gateway -n 200 --no-pager'
 ```
 
+## Live Teams Attachment Bridge QA
+
+Use [docs/milestone-two-live-teams-attachment-bridge.md](milestone-two-live-teams-attachment-bridge.md) for the Milestone 2.5 implementation spec.
+
+The current Stotz corporate sales runtime is configured for direct-message testing:
+
+- `channels.msteams.enabled=true`
+- `channels.msteams.dmPolicy=allowlist`
+- `channels.msteams.groupPolicy=disabled`
+- `channels.msteams.sharePointSiteId` is present
+- OpenClaw media root is `/home/openclaw/.openclaw/media`
+
+Trace recent inbound media without printing secrets:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'sudo find /home/openclaw/.openclaw/media/inbound -maxdepth 1 -type f -printf "%TY-%Tm-%Td %TH:%TM %s %p\n" | sort | tail -20'
+```
+
+For this milestone, the critical path is proving that a Teams-uploaded photo becomes one of:
+
+- `media://inbound/<media-id>`
+- `/home/openclaw/.openclaw/media/inbound/<file>`
+- a staged workspace media path passed to the agent
+
+The sidecar should then resolve that reference, analyze the real image with OpenAI, persist evidence metadata, and respond with the case number plus accepted/retake/missing guidance.
+
 ## Teams Phone QA
 
 In Microsoft Teams on iPhone, DM the Stotz sales agent:
