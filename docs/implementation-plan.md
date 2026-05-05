@@ -418,9 +418,11 @@ Likely responsibilities:
 
 - Let agent create trade cases from Teams.
 - Register uploaded media against a case.
+- Send photos and sampled video frames to the OpenAI API for visual inference.
+- Store visible machine condition findings and evidence quality findings.
 - Track checklist completeness.
-- Let agent respond with accepted/missing/retake guidance.
-- Generate a draft packet from structured state.
+- Let agent respond with accepted/missing/retake guidance while the sales rep is still in the field.
+- Generate a draft packet from structured state and visual findings.
 
 ### Phase 3: Analysis and Routing
 
