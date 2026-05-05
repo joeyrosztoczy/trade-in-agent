@@ -65,6 +65,7 @@ Supporting docs:
 - [docs/implementation-plan.md](docs/implementation-plan.md) describes the north star and MVP build sequence.
 - [docs/manual-qa.md](docs/manual-qa.md) gives manual QA steps for the current sidecar.
 - [docs/milestone-one-local-dev-bootstrap.md](docs/milestone-one-local-dev-bootstrap.md) specifies the local development bootstrap plan.
+- [docs/milestone-two-teams-evidence-loop.md](docs/milestone-two-teams-evidence-loop.md) specifies the Teams evidence loop milestone.
 - [docs/session-log-summary.md](docs/session-log-summary.md) summarizes the key remote Teams/session history.
 
 ## Likely First Build
