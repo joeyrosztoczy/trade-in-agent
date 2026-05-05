@@ -69,6 +69,7 @@ Supporting docs:
 - [docs/stotz-corp-sales-deployment-runbook.md](docs/stotz-corp-sales-deployment-runbook.md) gives the live Stotz corporate sales deployment and Teams phone QA runbook.
 - [docs/session-log-summary.md](docs/session-log-summary.md) summarizes the key remote Teams/session history.
 - [agent/TRADE-IN-TOOLS.md](agent/TRADE-IN-TOOLS.md) gives the OpenClaw-facing sidecar tool contract.
+- [agent/TRADE-IN-EVALUATION-ROUTE.md](agent/TRADE-IN-EVALUATION-ROUTE.md) gives the first-class route trigger and start/resume behavior.
 
 ## Likely First Build
 

@@ -5,6 +5,7 @@ import { analyzeEvidenceMedia } from './visualInference.js';
 function toTradeCase(row, machine = null, evidenceItems = undefined) {
   return {
     id: row.id,
+    caseNumber: formatCaseNumber(row.id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,
@@ -18,6 +19,10 @@ function toTradeCase(row, machine = null, evidenceItems = undefined) {
     machine,
     evidenceItems
   };
+}
+
+function formatCaseNumber(id) {
+  return `TIA-${String(id || '').replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 }
 
 function machinePayload(input = {}) {
@@ -461,9 +466,11 @@ export async function generateGuidance(id) {
     ...(checklist.uncertaintyFindings || []).slice(0, 2).map(finding => finding.finding)
   ].filter(Boolean);
 
-  const suggestedNextMessage = buildGuidanceMessage({ accepted, retake, missing, visibleSummary, limitationSummary, checklist });
+  const caseNumber = formatCaseNumber(id);
+  const suggestedNextMessage = buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist });
   return {
     tradeCaseId: id,
+    caseNumber,
     route: checklist.complete ? 'fast_path_candidate' : 'needs_more_evidence',
     packetReady: checklist.complete,
     acceptedEvidenceSummary: accepted,
@@ -495,6 +502,7 @@ export async function generatePacket(id) {
 
   const packet = {
     tradeCaseId: tradeCase.id,
+    caseNumber: tradeCase.caseNumber,
     generatedAt: new Date().toISOString(),
     route,
     valuationReadiness: checklist.complete ? 'ready_for_review' : 'not_ready',
@@ -544,6 +552,7 @@ export async function generatePacket(id) {
   return {
     id: result.rows[0].id,
     tradeCaseId: id,
+    caseNumber: tradeCase.caseNumber,
     packet,
     markdown: result.rows[0].packet_markdown,
     createdAt: result.rows[0].created_at
@@ -632,8 +641,9 @@ async function insertFinding(client, tradeCaseId, evidenceId, finding) {
   );
 }
 
-function buildGuidanceMessage({ accepted, retake, missing, visibleSummary, limitationSummary, checklist }) {
+function buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist }) {
   const lines = [];
+  if (caseNumber) lines.push(`Trade case ${caseNumber}.`);
   if (accepted.length) lines.push(`Accepted: ${accepted.join(', ')}.`);
   if (visibleSummary.length) lines.push(`Visible notes: ${visibleSummary.join(' ')}`);
   if (retake.length) lines.push(`Retake: ${retake.join(', ')}.`);
@@ -654,6 +664,8 @@ function packetToMarkdown(packet) {
     : 'None';
 
   return `# Trade Evaluation Draft Packet
+
+Case: ${packet.caseNumber || packet.tradeCaseId}
 
 Generated: ${packet.generatedAt}
 

@@ -87,6 +87,9 @@ if (!liveVision && !checklist.visibleConditionFindings.length) throw new Error('
 
 const guidance = await request(`/trade-cases/${tradeCase.id}/guidance`, { method: 'POST', body: '{}' });
 if (!guidance.suggestedNextMessage.includes('Next:')) throw new Error('Guidance did not include next-step message');
+if (!guidance.caseNumber || !guidance.suggestedNextMessage.includes(guidance.caseNumber)) {
+  throw new Error('Guidance did not include visible case number');
+}
 
 const packet = await request(`/trade-cases/${tradeCase.id}/packet`, { method: 'POST', body: '{}' });
 const packetJson = packet.packet;
@@ -101,6 +104,7 @@ console.log(JSON.stringify({
   ok: true,
   baseUrl,
   tradeCaseId: tradeCase.id,
+  caseNumber: guidance.caseNumber,
   checklist: {
     requiredCount: checklist.requiredCount,
     completeCount: checklist.completeCount,

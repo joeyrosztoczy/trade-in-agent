@@ -25,6 +25,7 @@ The production-like Stotz Teams test target is:
 - OpenClaw workspace: `/home/openclaw/openclaw-workspace`
 - Sidecar app root: `/home/openclaw/openclaw-workspace/trade-in-agent`
 - Agent tool docs: `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-TOOLS.md`
+- Agent route docs: `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md`
 - Agent project instructions: `/home/openclaw/openclaw-workspace/PROJECT.md`
 - Sidecar systemd unit: `/etc/systemd/system/trade-in-agent-sidecar.service`
 - Sidecar database: Postgres database `trade_in_agent_prod`
@@ -107,10 +108,11 @@ chown openclaw:openclaw "$APP_ROOT/.env"
 chmod 600 "$APP_ROOT/.env"
 
 sudo -u openclaw -H bash -lc "cd '$APP_ROOT/app' && npm ci"
-sudo -u openclaw -H bash -lc "cd '$APP_ROOT/app' && npm run migrate && npm run seed && npm test"
+sudo -u openclaw -H bash -lc "set -a; source '$APP_ROOT/.env'; set +a; cd '$APP_ROOT/app' && npm run migrate && npm run seed && npm test"
 
 cp "$APP_ROOT/agent/TRADE-IN-TOOLS.md" "$WORKSPACE/docs/trade-in-agent/TRADE-IN-TOOLS.md"
-chown openclaw:openclaw "$WORKSPACE/docs/trade-in-agent/TRADE-IN-TOOLS.md"
+cp "$APP_ROOT/agent/TRADE-IN-EVALUATION-ROUTE.md" "$WORKSPACE/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md"
+chown openclaw:openclaw "$WORKSPACE/docs/trade-in-agent/TRADE-IN-TOOLS.md" "$WORKSPACE/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md"
 
 python3 - <<'PY'
 from pathlib import Path
@@ -124,13 +126,33 @@ block = f"""{start}
 
 ## Trade-In Agent Sidecar
 
-Use the local sidecar at `http://127.0.0.1:8788` for John Deere trade-in evaluation workflows.
+Trade-in evaluation is a first-class active route, not a generic intake topic.
+
+If the user asks to start, continue, evaluate, appraise, price, or build a reconditioning budget for an equipment trade, first use the local sidecar at `http://127.0.0.1:8788` before replying.
+
+Trigger examples include `start a trade-in evaluation`, `evaluate a trade`, `combine trade`, `tractor trade`, `trade appraisal`, `used equipment evaluation`, `recon budget for this machine`, and `are these photos enough for a trade`.
+
+Required behavior:
+
+1. Check `GET /health`.
+2. Check active case with `GET /trade-cases/active?sourceConversationId=<id>` when a Teams conversation id is available.
+3. If no active case exists, call `POST /trade-cases`.
+4. On create or resume, always include the returned `caseNumber` and `id` in the user-facing reply.
+5. Use sidecar checklist and guidance for the next evidence ask.
+6. Register and analyze photos/videos through the sidecar when attachments are available.
+7. Use `POST /trade-cases/:id/packet` for reviewer handoff.
 
 Tool contract and Teams evidence-loop guidance:
 
 `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-TOOLS.md`
 
+Route trigger guidance:
+
+`/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md`
+
 For Teams users, keep replies field-focused: accepted evidence, retakes, missing evidence, visible condition notes, and next best photo/video request. Treat visual findings as visible observations, not a replacement for a licensed mechanical inspection.
+
+Current limit: numeric trade values and numeric reconditioning budgets are not automated yet. The workflow can produce evidence completeness, visible condition findings, limitations, risk flags, draft recon scenario structure, and reviewer handoff packets.
 
 {end}
 """
@@ -233,6 +255,12 @@ In Microsoft Teams on iPhone, DM the Stotz sales agent:
 Start a trade-in evaluation for a 2021 John Deere S780 combine. It has 1200 engine hours and 850 separator hours. This is a live test.
 ```
 
+Expected first response:
+
+- The agent creates or resumes a durable trade case through the sidecar.
+- The reply includes a visible `caseNumber`, such as `TIA-1234ABCD`, and the internal UUID `id`.
+- The agent asks for the next two or three evidence items instead of giving only generic intake guidance.
+
 Upload two to four machine photos. If a machine is not available, upload a non-machine image first to verify that visual inference rejects irrelevant evidence.
 
 Then send:
@@ -255,6 +283,21 @@ Generate the draft packet for reviewer handoff.
 ```
 
 If the agent says it cannot access Teams attachments, capture the exact Teams reply and check the OpenClaw gateway logs. That indicates the remaining issue is the Teams attachment handoff layer, not the sidecar, database, or OpenAI inference path.
+
+## Regression Prompt
+
+Use this after each workspace or sidecar deployment:
+
+```text
+I'd like to start a trade-in evaluation for a 2021 John Deere S780 combine with 1200 engine hours and 850 separator hours.
+```
+
+Expected:
+
+- create or resume a sidecar trade case
+- return `caseNumber` and `id`
+- ask for the first evidence slots, typically front 45, rear 45, and cab display/hours
+- avoid responding as a generic sales intake request
 
 ## Rollback And Restart
 

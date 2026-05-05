@@ -10,11 +10,15 @@ http://127.0.0.1:8788
 
 ## Field Conversation Rules
 
+- Treat trade-in evaluation as a first-class route. If the user asks to start, continue, evaluate, appraise, or build a recon budget for an equipment trade, use this sidecar before giving a generic intake answer.
+- On successful create or resume, include both `caseNumber` and `id` in the reply so the user can tell they are in the durable workflow.
 - Keep replies short enough for a sales rep standing near a machine.
 - Separate visible observations from uncertainty.
 - Never present visual inference as a full mechanical inspection.
 - Ask for the smallest useful next set of photos/video.
 - Use the sidecar as durable state; do not rely on chat memory alone.
+
+See `TRADE-IN-EVALUATION-ROUTE.md` for trigger phrases and the required start/resume behavior.
 
 ## Core Flow
 
