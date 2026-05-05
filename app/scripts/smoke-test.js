@@ -90,10 +90,17 @@ if (!guidance.suggestedNextMessage.includes('Next:')) throw new Error('Guidance 
 if (!guidance.caseNumber || !guidance.suggestedNextMessage.includes(guidance.caseNumber)) {
   throw new Error('Guidance did not include visible case number');
 }
+if (guidance.route !== 'needs_more_evidence') throw new Error(`Expected field collection route, got ${guidance.route}`);
+if (!guidance.nextEvidenceRequests.length) throw new Error('Guidance did not include targeted next evidence requests');
+if (!guidance.reviewStatus) throw new Error('Guidance did not include review status');
+
+const routing = await request(`/trade-cases/${tradeCase.id}/routing`, { method: 'POST', body: '{}' });
+if (routing.route !== guidance.route) throw new Error('Routing endpoint disagreed with guidance route');
+if (!Array.isArray(routing.riskFlags)) throw new Error('Routing endpoint did not include risk flags');
 
 const packet = await request(`/trade-cases/${tradeCase.id}/packet`, { method: 'POST', body: '{}' });
 const packetJson = packet.packet;
-for (const key of ['machine', 'evidenceCompleteness', 'route', 'recommendation']) {
+for (const key of ['machine', 'evidenceCompleteness', 'route', 'reviewStatus', 'riskFlags', 'recommendation']) {
   if (!(key in packetJson)) throw new Error(`Packet missing ${key}`);
 }
 if (!packet.markdown.includes('Trade Evaluation Draft Packet')) {
@@ -113,5 +120,8 @@ console.log(JSON.stringify({
   },
   guidance: guidance.suggestedNextMessage,
   packetId: packet.id,
-  route: packetJson.route
+  route: packetJson.route,
+  reviewStatus: packetJson.reviewStatus,
+  confidence: packetJson.confidence,
+  nextEvidenceRequests: guidance.nextEvidenceRequests
 }, null, 2));

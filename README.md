@@ -67,6 +67,7 @@ Supporting docs:
 - [docs/milestone-one-local-dev-bootstrap.md](docs/milestone-one-local-dev-bootstrap.md) specifies the local development bootstrap plan.
 - [docs/milestone-two-teams-evidence-loop.md](docs/milestone-two-teams-evidence-loop.md) specifies the Teams evidence loop milestone.
 - [docs/milestone-two-live-teams-attachment-bridge.md](docs/milestone-two-live-teams-attachment-bridge.md) specifies the live Teams attachment bridge milestone.
+- [docs/milestone-three-analysis-routing.md](docs/milestone-three-analysis-routing.md) specifies the evidence-to-route decision layer.
 - [docs/stotz-corp-sales-deployment-runbook.md](docs/stotz-corp-sales-deployment-runbook.md) gives the live Stotz corporate sales deployment and Teams phone QA runbook.
 - [docs/session-log-summary.md](docs/session-log-summary.md) summarizes the key remote Teams/session history.
 - [agent/TRADE-IN-TOOLS.md](agent/TRADE-IN-TOOLS.md) gives the OpenClaw-facing sidecar tool contract.

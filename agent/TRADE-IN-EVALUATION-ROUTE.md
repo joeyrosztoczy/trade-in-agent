@@ -36,7 +36,8 @@ Use this route before giving a generic intake response when the user says or imp
 5. Include the `caseNumber` and `id` in the user-facing reply whenever a case is created or resumed.
 6. Ask for the next evidence from sidecar checklist or guidance. Do not rely only on chat memory.
 7. When photos/videos are available, register them as evidence, analyze them through the sidecar, then fetch guidance.
-8. Use the sidecar packet endpoint for reviewer handoff.
+8. Use the guidance route and review status when answering. Do not invent a route from chat memory.
+9. Use the sidecar packet endpoint for reviewer handoff.
 
 ## Start-Case Payload Shape
 
@@ -73,3 +74,15 @@ Next, please send front 45, rear 45, and cab display/hours photos.
 - The route can produce evidence completeness, visible condition findings, limitations, risk flags, and draft recon scenario structure.
 - Never present visual inference as a licensed mechanical inspection.
 - Escalate when evidence is weak or the equipment risk is too high for photo/video review alone.
+
+## Routing Output
+
+Milestone 3 routes are computed by the sidecar:
+
+- `needs_more_evidence`
+- `fast_path_candidate`
+- `standard_review`
+- `escalation_required`
+- `technician_inspection_required`
+
+Always prefer `POST /trade-cases/:id/guidance` for field replies because it includes the route, confidence, risk flags, next evidence requests, and targeted follow-up questions in one response.

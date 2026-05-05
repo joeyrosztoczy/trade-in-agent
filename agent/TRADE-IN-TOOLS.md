@@ -36,6 +36,7 @@ See `TRADE-IN-EVALUATION-ROUTE.md` for trigger phrases and the required start/re
 - `POST /trade-cases/:id/evidence/batch`
 - `POST /trade-cases/:id/evidence/:evidenceId/analyze`
 - `GET /trade-cases/:id/checklist`
+- `POST /trade-cases/:id/routing`
 - `POST /trade-cases/:id/guidance`
 - `POST /trade-cases/:id/packet`
 
@@ -90,3 +91,23 @@ When speaking to the user:
 - "I cannot verify..." for limitations.
 - "Please retake..." for `needs_retake`.
 - "Still needed..." for missing checklist slots.
+
+## Routing And Review Status
+
+After analysis, call guidance or routing before replying:
+
+```text
+POST /trade-cases/:id/guidance
+```
+
+Guidance includes `route`, `reviewStatus`, `confidence`, `riskFlags`, `nextEvidenceRequests`, and `targetedFollowUpQuestions`.
+
+Route meanings:
+
+- `needs_more_evidence`: keep the rep in field collection and ask for the next smallest useful evidence set.
+- `fast_path_candidate`: evidence is complete and clean enough for fast centralized review.
+- `standard_review`: evidence is complete, but hours, visible wear, or concern-level notes need normal reviewer handling.
+- `escalation_required`: reviewer handoff is allowed, but identity or hour confirmation blocks valuation approval.
+- `technician_inspection_required`: visible high-risk condition findings require licensed technician or equivalent mechanical review before final approval.
+
+When speaking to the user, include the case number and the current route/confidence in plain language. If the route is `technician_inspection_required`, do not suggest a trade value or recon budget approval; explain that the case needs mechanical review first.

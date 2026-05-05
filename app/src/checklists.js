@@ -116,6 +116,7 @@ export function computeChecklist(unitType, evidenceItems) {
     weakCount: weak.length,
     retakeCount: retake.length,
     duplicateCount: stateBuckets.duplicate.length,
+    rejectedCount: stateBuckets.rejected.length,
     missingCount: missing.length,
     complete: missing.length === 0 && weak.length === 0 && retake.length === 0,
     acceptedSlots: complete.map(item => item.slot),

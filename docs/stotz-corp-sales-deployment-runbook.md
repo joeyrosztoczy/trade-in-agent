@@ -140,7 +140,8 @@ Required behavior:
 4. On create or resume, always include the returned `caseNumber` and `id` in the user-facing reply.
 5. Use sidecar checklist and guidance for the next evidence ask.
 6. Register and analyze photos/videos through the sidecar when attachments are available.
-7. Use `POST /trade-cases/:id/packet` for reviewer handoff.
+7. Use the guidance route, confidence, risk flags, and review status when replying.
+8. Use `POST /trade-cases/:id/packet` for reviewer handoff.
 
 Tool contract and Teams evidence-loop guidance:
 
@@ -150,9 +151,9 @@ Route trigger guidance:
 
 `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md`
 
-For Teams users, keep replies field-focused: accepted evidence, retakes, missing evidence, visible condition notes, and next best photo/video request. Treat visual findings as visible observations, not a replacement for a licensed mechanical inspection.
+For Teams users, keep replies field-focused: accepted evidence, retakes, missing evidence, current route, confidence, visible condition notes, and next best photo/video request. Treat visual findings as visible observations, not a replacement for a licensed mechanical inspection.
 
-Current limit: numeric trade values and numeric reconditioning budgets are not automated yet. The workflow can produce evidence completeness, visible condition findings, limitations, risk flags, draft recon scenario structure, and reviewer handoff packets.
+Current limit: numeric trade values and numeric reconditioning budgets are not automated yet. The workflow can produce evidence completeness, visible condition findings, limitations, fast/standard/escalation routing, human review status, risk flags, draft recon scenario structure, and reviewer handoff packets.
 
 {end}
 """
@@ -217,6 +218,8 @@ Expected smoke output:
 - a new `tradeCaseId`
 - `visibleFindingCount` greater than `0`
 - `route` usually `needs_more_evidence`
+- `reviewStatus` is present
+- targeted `nextEvidenceRequests` are present
 - field guidance describing accepted, missing, or rejected evidence
 
 Confirm live OpenAI inference was used:

@@ -1,6 +1,7 @@
 import { query, withTransaction } from './db.js';
 import { computeChecklist, normalizeUnitType } from './checklists.js';
 import { analyzeEvidenceMedia } from './visualInference.js';
+import { computeRoutingDecision } from './routing.js';
 
 function toTradeCase(row, machine = null, evidenceItems = undefined) {
   return {
@@ -12,8 +13,14 @@ function toTradeCase(row, machine = null, evidenceItems = undefined) {
     sourceConversationId: row.source_conversation_id,
     status: row.status,
     route: row.route,
-    confidence: row.confidence,
+    confidence: numberOrNull(row.confidence),
     assignedReviewer: row.assigned_reviewer,
+    reviewStatus: row.review_status,
+    reviewNotes: row.review_notes,
+    reviewUpdatedAt: row.review_updated_at,
+    routeReason: row.route_reason,
+    riskFlags: row.risk_flags_json || [],
+    routingDecision: row.routing_decision_json || {},
     archivedAt: row.archived_at,
     active: row.active,
     machine,
@@ -148,6 +155,15 @@ export async function updateTradeCase(id, input = {}) {
            confidence = $4,
            assigned_reviewer = $5,
            source_conversation_id = $6,
+           review_status = $7,
+           review_notes = $8,
+           route_reason = $9,
+           risk_flags_json = $10::jsonb,
+           routing_decision_json = $11::jsonb,
+           review_updated_at = CASE
+             WHEN $7 IS DISTINCT FROM review_status OR $8 IS DISTINCT FROM review_notes THEN NOW()
+             ELSE review_updated_at
+           END,
            updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -157,7 +173,12 @@ export async function updateTradeCase(id, input = {}) {
         input.route ?? current.route,
         input.confidence ?? current.confidence,
         input.assignedReviewer ?? input.assigned_reviewer,
-        input.sourceConversationId ?? input.source_conversation_id
+        input.sourceConversationId ?? input.source_conversation_id,
+        input.reviewStatus ?? input.review_status ?? current.review_status,
+        input.reviewNotes ?? input.review_notes ?? current.review_notes,
+        input.routeReason ?? input.route_reason ?? current.route_reason,
+        JSON.stringify(input.riskFlags ?? input.risk_flags_json ?? current.risk_flags_json ?? []),
+        JSON.stringify(input.routingDecision ?? input.routing_decision_json ?? current.routing_decision_json ?? {})
       ]
     );
 
@@ -329,6 +350,30 @@ export async function listFindings(id) {
   return result.rows.map(rowToFinding);
 }
 
+async function persistRoutingDecision(id, routing) {
+  await query(
+    `UPDATE trade_cases
+     SET route = $2,
+         confidence = $3,
+         review_status = $4,
+         route_reason = $5,
+         risk_flags_json = $6::jsonb,
+         routing_decision_json = $7::jsonb,
+         review_updated_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [
+      id,
+      routing.route,
+      routing.confidence,
+      routing.reviewStatus,
+      routing.routeReason,
+      JSON.stringify(routing.riskFlags),
+      JSON.stringify(routing)
+    ]
+  );
+}
+
 export async function analyzeEvidence(tradeCaseId, evidenceId, input = {}) {
   return withTransaction(async client => {
     const tradeCaseResult = await client.query(
@@ -455,11 +500,17 @@ export async function generateGuidance(id) {
   const tradeCase = await getTradeCase(id);
   if (!tradeCase) return null;
   const checklist = await getChecklistStatus(id);
+  const routing = computeRoutingDecision({ tradeCase, checklist, findings: findingsFromChecklist(checklist) });
+  await persistRoutingDecision(id, routing);
   const conditionFindings = checklist.visibleConditionFindings || [];
   const qualityFindings = checklist.evidenceQualityFindings || [];
   const accepted = checklist.acceptedSlots.slice(0, 6);
   const retake = checklist.retakeSlots.slice(0, 4);
-  const missing = checklist.nextRecommendedSlots.length ? checklist.nextRecommendedSlots : checklist.missingSlots.slice(0, 4);
+  const missing = routing.nextEvidenceRequests.length
+    ? routing.nextEvidenceRequests.map(request => request.slot)
+    : checklist.nextRecommendedSlots.length
+      ? checklist.nextRecommendedSlots
+      : checklist.missingSlots.slice(0, 4);
   const visibleSummary = conditionFindings.slice(0, 3).map(finding => finding.finding);
   const limitationSummary = [
     ...qualityFindings.filter(finding => finding.needsFollowUp).slice(0, 2).map(finding => finding.recommendation || finding.finding),
@@ -467,18 +518,41 @@ export async function generateGuidance(id) {
   ].filter(Boolean);
 
   const caseNumber = formatCaseNumber(id);
-  const suggestedNextMessage = buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist });
+  const suggestedNextMessage = buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist, routing });
   return {
     tradeCaseId: id,
     caseNumber,
-    route: checklist.complete ? 'fast_path_candidate' : 'needs_more_evidence',
-    packetReady: checklist.complete,
+    route: routing.route,
+    routeCategory: routing.routeCategory,
+    reviewStatus: routing.reviewStatus,
+    confidence: routing.confidence,
+    packetReady: routing.packetReady,
+    routeReason: routing.routeReason,
+    riskFlags: routing.riskFlags,
     acceptedEvidenceSummary: accepted,
     visibleConditionSummary: visibleSummary,
     retakeRequests: retake,
     missingEvidenceRequests: missing.filter(slot => !retake.includes(slot)),
+    nextEvidenceRequests: routing.nextEvidenceRequests,
+    targetedFollowUpQuestions: routing.targetedFollowUpQuestions,
+    escalationReasons: routing.escalationReasons,
     uncertaintyAndLimitations: limitationSummary,
     suggestedNextMessage,
+    checklist
+  };
+}
+
+export async function getRoutingStatus(id) {
+  const tradeCase = await getTradeCase(id);
+  if (!tradeCase) return null;
+  const checklist = await getChecklistStatus(id);
+  const routing = computeRoutingDecision({ tradeCase, checklist, findings: findingsFromChecklist(checklist) });
+  await persistRoutingDecision(id, routing);
+  return {
+    tradeCaseId: id,
+    caseNumber: tradeCase.caseNumber,
+    generatedAt: new Date().toISOString(),
+    ...routing,
     checklist
   };
 }
@@ -495,49 +569,58 @@ export async function generatePacket(id) {
   const conditionFindings = findings.filter(finding => finding.findingType === 'condition');
   const evidenceQualityFindings = findings.filter(finding => finding.findingType === 'evidence_quality');
   const uncertaintyFindings = findings.filter(finding => finding.findingType === 'uncertainty');
-  const route = checklist.complete ? 'fast_path_candidate' : 'needs_more_evidence';
-  const nextStep = checklist.complete
-    ? 'Centralized used evaluation reviewer should review the draft packet.'
-    : `Collect missing baseline evidence: ${checklist.missingSlots.join(', ')}.`;
+  const routing = computeRoutingDecision({ tradeCase, checklist, findings });
+  await persistRoutingDecision(id, routing);
+  const nextStep = routing.route === 'technician_inspection_required'
+    ? 'Hold valuation approval and route to a licensed technician or equivalent mechanical reviewer before final trade approval.'
+    : routing.packetReady
+      ? 'Centralized used evaluation reviewer should review the draft packet.'
+      : `Collect the next required evidence: ${routing.nextEvidenceRequests.map(request => request.description).join(', ') || checklist.missingSlots.join(', ')}.`;
 
   const packet = {
     tradeCaseId: tradeCase.id,
     caseNumber: tradeCase.caseNumber,
     generatedAt: new Date().toISOString(),
-    route,
-    valuationReadiness: checklist.complete ? 'ready_for_review' : 'not_ready',
+    route: routing.route,
+    routeCategory: routing.routeCategory,
+    routeReason: routing.routeReason,
+    reviewStatus: routing.reviewStatus,
+    confidence: routing.confidence,
+    valuationReadiness: routing.packetReady && routing.route !== 'technician_inspection_required' ? 'ready_for_review' : 'hold_or_incomplete',
     machine: tradeCase.machine,
     evidenceCompleteness: checklist,
     visibleConditionFindings: conditionFindings,
     evidenceQualityFindings,
     uncertaintyFindings,
-    riskFlags: [],
+    riskFlags: routing.riskFlags,
+    nextEvidenceRequests: routing.nextEvidenceRequests,
+    targetedFollowUpQuestions: routing.targetedFollowUpQuestions,
     reconScenarios: [
       {
         scenarioType: 'light',
-        assumptions: 'Baseline only; no major visible risk flags recorded yet.',
+        assumptions: 'Use only when reviewer confirms no material visible or mechanical risk flags.',
         includedWork: [],
         excludedWork: ['Mechanical inspection', 'Detailed shop estimate'],
-        riskNotes: checklist.complete ? 'Needs reviewer validation.' : 'Evidence incomplete.'
+        riskNotes: routing.route === 'fast_path_candidate' ? 'Needs reviewer validation.' : 'Not the primary scenario for this route.'
       },
       {
         scenarioType: 'standard',
         assumptions: 'Use when average wear or incomplete confidence appears during reviewer analysis.',
         includedWork: [],
         excludedWork: ['Final approved work order'],
-        riskNotes: 'Placeholder scenario for MVP packet structure.'
+        riskNotes: routing.route === 'standard_review' ? routing.routeReason : 'Reviewer should validate against visible findings.'
       },
       {
         scenarioType: 'heavy',
         assumptions: 'Use when major wear, leaks, warning lights, structural damage, or weak evidence requires escalation.',
         includedWork: [],
         excludedWork: ['Licensed technician inspection details'],
-        riskNotes: 'May require full licensed-technician inspection.'
+        riskNotes: routing.escalationReasons.length ? routing.escalationReasons.join(' ') : 'May require full licensed-technician inspection.'
       }
     ],
     recommendation: {
       preliminaryTradeValue: null,
-      reason: 'Numeric valuation is out of scope for Milestone Two.',
+      reason: 'Numeric valuation is out of scope for Milestone Three; route, confidence, risk flags, and reviewer questions are now produced.',
       nextStep
     }
   };
@@ -567,8 +650,8 @@ function rowToMachine(row = {}) {
     model: row.model,
     modelYear: row.model_year,
     serialOrPin: row.serial_or_pin,
-    engineHours: row.engine_hours,
-    separatorHours: row.separator_hours,
+    engineHours: numberOrNull(row.engine_hours),
+    separatorHours: numberOrNull(row.separator_hours),
     location: row.location,
     attachmentsOrOptions: row.attachments_or_options
   };
@@ -614,10 +697,24 @@ function rowToFinding(row = {}) {
     section: row.section,
     finding: row.finding,
     severity: row.severity,
-    confidence: row.confidence,
+    confidence: numberOrNull(row.confidence),
     needsFollowUp: row.needs_follow_up,
     recommendation: row.recommendation
   };
+}
+
+function findingsFromChecklist(checklist = {}) {
+  return [
+    ...(checklist.visibleConditionFindings || []),
+    ...(checklist.evidenceQualityFindings || []),
+    ...(checklist.uncertaintyFindings || [])
+  ];
+}
+
+function numberOrNull(value) {
+  if (value == null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 async function insertFinding(client, tradeCaseId, evidenceId, finding) {
@@ -641,18 +738,22 @@ async function insertFinding(client, tradeCaseId, evidenceId, finding) {
   );
 }
 
-function buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist }) {
+function buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist, routing }) {
   const lines = [];
   if (caseNumber) lines.push(`Trade case ${caseNumber}.`);
+  if (routing?.route) lines.push(`Route: ${routing.route} (${Math.round((routing.confidence || 0) * 100)}% confidence).`);
   if (accepted.length) lines.push(`Accepted: ${accepted.join(', ')}.`);
   if (visibleSummary.length) lines.push(`Visible notes: ${visibleSummary.join(' ')}`);
   if (retake.length) lines.push(`Retake: ${retake.join(', ')}.`);
   if (missing.length) lines.push(`Still needed: ${missing.filter(slot => !retake.includes(slot)).join(', ')}.`);
   if (limitationSummary.length) lines.push(`Limitations: ${limitationSummary.join(' ')}`);
-  if (checklist.complete) {
+  if (routing?.routeReason) lines.push(`Why: ${routing.routeReason}`);
+  if (routing?.route === 'technician_inspection_required') {
+    lines.push('Next: hold valuation approval and route this case for licensed-technician inspection or equivalent mechanical review.');
+  } else if (routing?.packetReady || checklist.complete) {
     lines.push('Next: evidence package is ready for centralized used evaluation review.');
   } else {
-    const next = checklist.nextRecommendedSlots[0] || checklist.missingSlots[0];
+    const next = routing?.nextEvidenceRequests?.[0]?.description || checklist.nextRecommendedSlots[0] || checklist.missingSlots[0];
     lines.push(next ? `Next: please capture ${next}.` : 'Next: continue collecting baseline evidence.');
   }
   return lines.join('\n');
@@ -662,6 +763,12 @@ function packetToMarkdown(packet) {
   const missing = packet.evidenceCompleteness.missingSlots.length
     ? packet.evidenceCompleteness.missingSlots.join(', ')
     : 'None';
+  const riskFlags = packet.riskFlags.length
+    ? packet.riskFlags.map(flag => `- [${flag.severity}] ${flag.message}`).join('\n')
+    : '- None recorded';
+  const followUps = packet.targetedFollowUpQuestions.length
+    ? packet.targetedFollowUpQuestions.map(question => `- ${question}`).join('\n')
+    : '- None';
 
   return `# Trade Evaluation Draft Packet
 
@@ -692,7 +799,18 @@ ${[...packet.evidenceQualityFindings, ...packet.uncertaintyFindings].length ? [.
 
 ## Route
 
-${packet.route}
+- Route: ${packet.route}
+- Review status: ${packet.reviewStatus}
+- Confidence: ${Math.round((packet.confidence || 0) * 100)}%
+- Reason: ${packet.routeReason}
+
+## Risk Flags
+
+${riskFlags}
+
+## Reviewer / Field Follow-Up Questions
+
+${followUps}
 
 ## Recommendation
 

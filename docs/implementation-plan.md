@@ -434,6 +434,8 @@ Milestone 2.5, [Live Teams Attachment Bridge](milestone-two-live-teams-attachmen
 - Add targeted follow-up question generation.
 - Add human review status.
 
+Milestone 3, [Analysis And Routing](milestone-three-analysis-routing.md), implements the first sidecar-owned route decision layer and persists review status, confidence, risk flags, route reason, and targeted field follow-up questions.
+
 ### Phase 4: Review UI
 
 - Build a small web UI on the VM for internal reviewers.

@@ -118,6 +118,7 @@ Expected:
 - checklist counts
 - packet id
 - route, usually `needs_more_evidence` because the smoke test only uploads one evidence item
+- review status and targeted next evidence requests
 
 ### 5. Manual API Walkthrough
 
@@ -161,6 +162,12 @@ Fetch checklist:
 curl -fsS "http://127.0.0.1:8788/trade-cases/$CASE_ID/checklist"
 ```
 
+Compute routing:
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:8788/trade-cases/$CASE_ID/routing"
+```
+
 Generate packet:
 
 ```bash
@@ -173,6 +180,10 @@ Expected packet includes:
 - evidence completeness
 - missing evidence
 - route
+- review status
+- confidence
+- risk flags
+- targeted follow-up questions
 - recommendation / next step
 
 ## Phase Two Evidence Loop QA
@@ -193,7 +204,7 @@ multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in
 Expected:
 
 - `visibleFindingCount` is greater than `0`
-- `guidance` includes accepted evidence, visible notes, missing evidence, and limitations
+- `guidance` includes accepted evidence, visible notes, missing evidence, route, review status, and limitations
 - `route` is `needs_more_evidence` until all required baseline slots are accepted
 
 To run live OpenAI visual inference, add an API key to the VM `.env`, switch out of fixture mode, restart the service, and rerun the smoke path:
