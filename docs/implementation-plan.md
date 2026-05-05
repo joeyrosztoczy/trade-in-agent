@@ -8,14 +8,55 @@ The agent should analyze evidence quality, ask for additional photos/video only 
 
 The app service should own durable state. The agent should own conversation, interpretation, and guidance.
 
+The broader north star is to create a cost-effective but risk-effective entry point for used equipment trade evaluation, reconditioning planning, remarketing readiness, and downstream business-system workflows.
+
+## Business Context
+
+Trade-in pricing is one of the largest profitability risks and inventory liquidity drivers for the John Deere dealerships we own. A weak trade value or missed reconditioning issue can turn into margin loss, aging inventory, delayed remarketing, and avoidable operational churn.
+
+The project is also about reconditioning discipline. Understanding what it will take to get a unit ready for remarketing is as important as the trade value itself.
+
+Today there are two distinct operating models:
+
+- **Stotz:** informal and inconsistent. Sometimes sales reps inspect thoroughly, sometimes they ask for mechanic input, and sometimes machines receive only a light look.
+- **Premier:** much more formal for combines and large tractors, often sending field mechanics for full inspections that can cost roughly $3,000 per unit.
+
+The desired workflow should land between these extremes:
+
+- more controlled and risk-effective than Stotz's current process
+- less expensive and more scalable than defaulting to Premier-style full inspections
+- explicit about when the evidence is not enough and a licensed technician inspection is required
+
+This app should eventually become an entry point for systems around trade valuation, reconditioning work, remarketing, photo/media handling, Machine Finder Pro, and JDDO/Microsoft Dynamics.
+
 ## Product Principles
 
 - Teams is the primary user interface for sales reps.
 - The workflow must be realistic in the field with a customer nearby.
 - Start with evidence completeness and risk routing, not final autonomous valuation.
 - Separate confirmed facts, agent observations, assumptions, and human judgment.
+- Treat full mechanical inspections as an escalation tool, not a failure case.
+- Optimize for dealership profitability, inventory liquidity, and risk control.
 - Design downstream integrations from day one as queued jobs, even when the MVP uses manual/stub adapters.
 - Keep photos, videos, and case state durable beyond any single chat session.
+
+## Users And Review Model
+
+Field users will often be:
+
+- sales reps
+- sales support teammates
+- transportation/support staff
+- training or customer experience teammates
+
+Centralized used evaluation teams at Stotz and Premier should be the main review audience. The system should create packets that can be reviewed, approved, revised, and redistributed back to sales reps.
+
+The MVP should assume:
+
+- field users collect evidence
+- the agent guides completeness and creates the draft packet
+- centralized reviewers approve or request additional evidence
+- licensed technicians are involved when the risk profile requires deeper mechanical inspection
 
 ## Initial Supported Scope
 
@@ -253,6 +294,7 @@ Output:
 - hold preliminary valuation or mark as high uncertainty
 - require deeper evidence
 - route to human mechanical/commercial review
+- recommend a full licensed-technician inspection when the risk cannot be responsibly resolved through photos/video
 
 ## Trade Packet Output
 
@@ -266,12 +308,37 @@ The packet should include:
 - risk flags
 - recon scenarios: light, standard, heavy
 - valuation readiness
+- preliminary trade value recommendation or reason no recommendation should be made yet
 - confidence level
 - assumptions
 - questions for reviewer
 - recommended next step
+- full mechanical inspection recommendation, if needed
 
 For the MVP, the packet can be Markdown and JSON. Later it can produce PDF/Word/SharePoint artifacts.
+
+## Valuation Data Strategy
+
+The MVP should establish the structure for calibrated valuations without requiring all data sources to be integrated on day one.
+
+Future valuation inputs should include:
+
+- company sales history
+- internal trade and inventory history
+- competitive listings and pricing from TractorHouse and other dealership websites
+- general industry data
+- equipment condition findings from the evidence package
+- reconditioning budget scenarios
+- inventory liquidity and remarketing readiness signals
+
+The app should keep source attribution clear:
+
+- what data was used
+- what was missing
+- what was estimated
+- what requires reviewer judgment
+
+Automated valuation should be staged carefully. Early packets can include valuation readiness, comps needed, and reviewer questions before they include numeric recommendations.
 
 ## Storage Strategy
 
@@ -312,6 +379,7 @@ Likely responsibilities:
 - track sync status
 - avoid duplicate upload
 - preserve original evidence package
+- support remarketing readiness once the unit is approved for listing
 
 ### JDDO / Microsoft Dynamics
 
@@ -323,6 +391,7 @@ Likely responsibilities:
 - recon estimate handoff
 - approval status sync
 - audit trail of agent-generated packet and reviewer decision
+- business-system entry point for downstream used-equipment workflows
 
 ### Fabric / Lakehouse
 
