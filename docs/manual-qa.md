@@ -8,6 +8,37 @@ These steps verify the Phase One local foundations without requiring a UI.
 
 The current verified path uses the Multipass VM named `trade-in-agent-dev`.
 
+### Full OpenClaw + Sidecar Bootstrap
+
+Use this path when you want the local VM to include the Stotz corporate sales OpenClaw deployment plus the trade-in sidecar:
+
+```bash
+./scripts/bootstrap-openclaw-multipass.sh
+```
+
+This delegates the OpenClaw install to:
+
+`~/.openclaw/workspaces/openclaw-on-azure/repo/scripts/local/qa.sh`
+
+with the default deployment plan:
+
+`deployments/stotz-corp-sales.json`
+
+Then it installs the trade-in sidecar onto the same VM.
+
+The OpenClaw QA script may return nonzero from post-smoke reconciler validation even after the gateway and Teams/SharePoint/Fabric smoke checks pass. The trade-in bootstrap continues for local development if `openclaw-gateway` is active. To make the OpenClaw validation failure stop the bootstrap, run:
+
+```bash
+OPENCLAW_STRICT_QA=1 ./scripts/bootstrap-openclaw-multipass.sh
+```
+
+Validate both services:
+
+```bash
+multipass exec trade-in-agent-dev -- sudo systemctl is-active openclaw-gateway
+multipass exec trade-in-agent-dev -- sudo systemctl is-active trade-in-agent-sidecar.service
+```
+
 ### 1. Bootstrap VM
 
 ```bash

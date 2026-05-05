@@ -70,3 +70,15 @@ Supporting docs:
 ## Likely First Build
 
 The first local prototype should be a lightweight intake and review app, not a final pricing engine. It should collect the required baseline evidence, ask targeted follow-up questions, and create a valuation packet that separates confirmed facts from assumptions.
+
+## Local OpenClaw Bootstrap
+
+For local OpenClaw + sidecar QA, use the OpenClaw Azure day-two operations repo:
+
+```bash
+./scripts/bootstrap-openclaw-multipass.sh
+```
+
+By default this uses `~/.openclaw/workspaces/openclaw-on-azure/repo` and `deployments/stotz-corp-sales.json`, then installs the trade-in sidecar onto the same Multipass VM.
+
+The OpenClaw local QA path runs smoke tests and then a stricter reconciler validation. For local sidecar work, the bootstrap continues if that post-smoke validation returns nonzero but the gateway service is active. Set `OPENCLAW_STRICT_QA=1` when the OpenClaw validation itself should be the release gate.

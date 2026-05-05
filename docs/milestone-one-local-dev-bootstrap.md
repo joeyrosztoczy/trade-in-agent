@@ -73,7 +73,8 @@ The app service should be designed so it can run both:
 6. Health check and smoke test.
 7. Seed data for one combine trade case.
 8. Sidecar API contract for OpenClaw agent calls.
-9. Milestone documentation for both local lanes.
+9. OpenClaw deployment bootstrap wrapper that uses the `openclaw-on-azure/repo` local QA tooling.
+10. Milestone documentation for both local lanes.
 
 ## Phase One Coverage Map
 
@@ -105,6 +106,7 @@ trade-in-agent/
   scripts/
     bootstrap-host.sh
     bootstrap-multipass.sh
+    bootstrap-openclaw-multipass.sh
     dev.sh
     smoke-test.sh
   infra/
@@ -250,9 +252,47 @@ Expected result:
 - app service is reachable inside the VM at `http://127.0.0.1:8788`
 - OpenClaw/tool tests can create a trade case through the sidecar
 
+## OpenClaw Deployment Bootstrap Spec
+
+Script:
+
+`scripts/bootstrap-openclaw-multipass.sh`
+
+Responsibilities:
+
+1. Locate the OpenClaw Azure repo, defaulting to `~/.openclaw/workspaces/openclaw-on-azure/repo`.
+2. Use `scripts/local/qa.sh` from that repo to bootstrap a local Multipass VM.
+3. Use `deployments/stotz-corp-sales.json` by default so the VM mirrors the Stotz corporate sales deployment.
+4. Keep the VM available after OpenClaw QA.
+5. Continue past OpenClaw post-smoke validation failures for local sidecar work when the gateway service is active, unless `OPENCLAW_STRICT_QA=1` is set.
+6. Run this project's `scripts/bootstrap-multipass.sh` against the same VM to install Postgres and the trade-in sidecar.
+7. Leave both `openclaw-gateway` and `trade-in-agent-sidecar.service` running under systemd.
+
+Default command:
+
+```bash
+./scripts/bootstrap-openclaw-multipass.sh
+```
+
+Configurable environment variables:
+
+- `OPENCLAW_AZURE_REPO`
+- `OPENCLAW_DEPLOYMENT_PLAN`
+- `VM_NAME`
+- `KEEP_VM`
+- `PUBLIC_FQDN`
+- `OPENCLAW_STRICT_QA`
+- `TIMEOUT_SECS`
+
+Expected result:
+
+- OpenClaw Stotz corporate sales deployment is installed through the OpenClaw Azure day-two operations tooling.
+- Trade-in sidecar is installed onto the same VM.
+- Sidecar smoke tests pass against the same VM where OpenClaw is running.
+
 ## Stotz Sales Deployment Replica
 
-Use the existing `openclaw-on-azure` local QA concepts as reference, but keep Milestone One focused.
+Use the existing `openclaw-on-azure/repo` local QA tooling as the owner of OpenClaw deployment bootstrap.
 
 The local VM does not need real Teams delivery, real JDDO credentials, or real Machine Finder Pro integration.
 
