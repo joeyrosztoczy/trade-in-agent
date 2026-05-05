@@ -173,6 +173,37 @@ Expected packet includes:
 - route
 - recommendation / next step
 
+## Phase Two Evidence Loop QA
+
+The Phase Two smoke test exercises the Teams-style evidence loop in fixture mode:
+
+- creates a case with `sourceConversationId`
+- registers Teams/OpenClaw-style attachment metadata
+- runs visual inference through the sidecar fixture adapter
+- stores visible condition and evidence quality findings
+- returns field guidance
+- generates a packet that includes findings and limitations
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
+```
+
+Expected:
+
+- `visibleFindingCount` is greater than `0`
+- `guidance` includes accepted evidence, visible notes, missing evidence, and limitations
+- `route` is `needs_more_evidence` until all required baseline slots are accepted
+
+To run live OpenAI visual inference, add an API key to the VM `.env`, switch out of fixture mode, restart the service, and rerun the smoke path:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc "cd /home/ubuntu/trade-in-agent && printf '\nOPENAI_API_KEY=sk-...\nOPENAI_VISION_MODE=live\n' >> .env"
+multipass exec trade-in-agent-openclaw-dev -- sudo systemctl restart trade-in-agent-sidecar.service
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
+```
+
+Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path.
+
 ## Host QA Path
 
 Host QA requires Postgres reachable via `DATABASE_URL`.

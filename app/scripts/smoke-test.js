@@ -47,22 +47,44 @@ await request(`/trade-cases/${tradeCase.id}`, {
   })
 });
 
-await request(`/trade-cases/${tradeCase.id}/evidence`, {
+const batch = await request(`/trade-cases/${tradeCase.id}/evidence/batch`, {
   method: 'POST',
   body: JSON.stringify({
-    uploadedBy: 'smoke-test',
-    mediaType: 'photo',
-    storageUri: 'fixtures/media/front-45-placeholder.jpg',
-    checklistSlot: 'front_45',
-    qualityStatus: 'accepted',
-    analysisStatus: 'pending',
-    notes: 'Smoke test evidence'
+    items: [
+      {
+        uploadedBy: 'smoke-test',
+        mediaType: 'photo',
+        storageUri: 'fixtures/media/front-45-placeholder.jpg',
+        originalFileName: 'front-45-placeholder.jpg',
+        contentType: 'image/jpeg',
+        sourceMessageId: 'smoke-message-1',
+        sourceAttachmentId: 'smoke-attachment-1',
+        checklistSlot: 'front_45',
+        qualityStatus: 'pending',
+        analysisStatus: 'pending',
+        notes: 'Smoke test evidence'
+      }
+    ]
   })
 });
+
+const evidenceId = batch.items[0].id;
+const analysis = await request(`/trade-cases/${tradeCase.id}/evidence/${evidenceId}/analyze`, {
+  method: 'POST',
+  body: JSON.stringify({
+    analysisMode: 'field_evidence_quality',
+    checklistSlot: 'front_45'
+  })
+});
+if (analysis.analysis.analysisStatus !== 'complete') throw new Error('Visual analysis did not complete');
 
 const checklist = await request(`/trade-cases/${tradeCase.id}/checklist`);
 if (checklist.requiredCount <= 0) throw new Error('Checklist did not include required slots');
 if (!checklist.missingSlots.includes('rear_45')) throw new Error('Checklist did not report expected missing slot');
+if (!checklist.visibleConditionFindings.length) throw new Error('Checklist did not include visual findings');
+
+const guidance = await request(`/trade-cases/${tradeCase.id}/guidance`, { method: 'POST', body: '{}' });
+if (!guidance.suggestedNextMessage.includes('Still needed')) throw new Error('Guidance did not include missing evidence message');
 
 const packet = await request(`/trade-cases/${tradeCase.id}/packet`, { method: 'POST', body: '{}' });
 const packetJson = packet.packet;
@@ -80,8 +102,10 @@ console.log(JSON.stringify({
   checklist: {
     requiredCount: checklist.requiredCount,
     completeCount: checklist.completeCount,
-    missingCount: checklist.missingCount
+    missingCount: checklist.missingCount,
+    visibleFindingCount: checklist.visibleConditionFindings.length
   },
+  guidance: guidance.suggestedNextMessage,
   packetId: packet.id,
   route: packetJson.route
 }, null, 2));

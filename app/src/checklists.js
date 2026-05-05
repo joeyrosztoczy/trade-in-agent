@@ -50,36 +50,89 @@ export function getChecklist(unitType) {
 }
 
 export function computeChecklist(unitType, evidenceItems) {
-  const acceptedEvidence = new Map();
+  const evidenceBySlot = new Map();
   for (const item of evidenceItems || []) {
     if (!item.checklist_slot) continue;
-    if (['accepted', 'usable'].includes(item.quality_status)) {
-      acceptedEvidence.set(item.checklist_slot, item);
+    const existing = evidenceBySlot.get(item.checklist_slot) || [];
+    existing.push(item);
+    evidenceBySlot.set(item.checklist_slot, existing);
+  }
+
+  const stateBuckets = {
+    accepted: [],
+    weak: [],
+    retake: [],
+    duplicate: [],
+    rejected: [],
+    pending: []
+  };
+
+  for (const items of evidenceBySlot.values()) {
+    for (const item of items) {
+      const status = normalizeEvidenceStatus(item.quality_status);
+      stateBuckets[status].push(item);
     }
   }
 
   const items = getChecklist(unitType).map(([slot, description, requiredForBaseline]) => {
-    const evidence = acceptedEvidence.get(slot);
+    const slotEvidence = evidenceBySlot.get(slot) || [];
+    const accepted = slotEvidence.find(item => ['accepted', 'usable'].includes(item.quality_status));
+    const weak = slotEvidence.find(item => item.quality_status === 'weak');
+    const retake = slotEvidence.find(item => item.quality_status === 'needs_retake');
+    const duplicate = slotEvidence.find(item => item.quality_status === 'duplicate');
+    const evidence = accepted || weak || retake || duplicate || slotEvidence[0];
+    const status = accepted
+      ? 'complete'
+      : weak
+        ? 'weak'
+        : retake
+          ? 'needs_retake'
+          : requiredForBaseline
+            ? 'missing'
+            : 'optional';
     return {
       slot,
       description,
       requiredForBaseline,
-      status: evidence ? 'complete' : requiredForBaseline ? 'missing' : 'optional',
-      evidenceItemId: evidence?.id || null
+      status,
+      evidenceItemId: evidence?.id || null,
+      qualityStatus: evidence?.quality_status || null,
+      analysisStatus: evidence?.analysis_status || null
     };
   });
 
   const required = items.filter(item => item.requiredForBaseline);
   const complete = required.filter(item => item.status === 'complete');
   const missing = required.filter(item => item.status === 'missing');
+  const weak = required.filter(item => item.status === 'weak');
+  const retake = required.filter(item => item.status === 'needs_retake');
+  const nextRecommendedSlots = [...retake, ...missing, ...weak].slice(0, 3).map(item => item.slot);
 
   return {
     unitType: normalizeUnitType(unitType),
     requiredCount: required.length,
     completeCount: complete.length,
+    acceptedCount: complete.length,
+    weakCount: weak.length,
+    retakeCount: retake.length,
+    duplicateCount: stateBuckets.duplicate.length,
     missingCount: missing.length,
-    complete: missing.length === 0,
+    complete: missing.length === 0 && weak.length === 0 && retake.length === 0,
+    acceptedSlots: complete.map(item => item.slot),
+    weakSlots: weak.map(item => item.slot),
+    retakeSlots: retake.map(item => item.slot),
+    duplicateSlots: stateBuckets.duplicate.map(item => item.checklist_slot),
     missingSlots: missing.map(item => item.slot),
+    nextRecommendedSlots,
     items
   };
+}
+
+function normalizeEvidenceStatus(status) {
+  if (['accepted', 'usable'].includes(status)) return 'accepted';
+  if (status === 'weak') return 'weak';
+  if (status === 'needs_retake') return 'retake';
+  if (status === 'duplicate') return 'duplicate';
+  if (status === 'rejected') return 'rejected';
+  return 'pending';
 }

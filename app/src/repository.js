@@ -1,5 +1,6 @@
 import { query, withTransaction } from './db.js';
 import { computeChecklist, normalizeUnitType } from './checklists.js';
+import { analyzeEvidenceMedia } from './visualInference.js';
 
 function toTradeCase(row, machine = null, evidenceItems = undefined) {
   return {
@@ -13,6 +14,7 @@ function toTradeCase(row, machine = null, evidenceItems = undefined) {
     confidence: row.confidence,
     assignedReviewer: row.assigned_reviewer,
     archivedAt: row.archived_at,
+    active: row.active,
     machine,
     evidenceItems
   };
@@ -110,6 +112,24 @@ export async function getTradeCase(id) {
   return toTradeCase(row, row.machine ? rowToMachine(row.machine) : null, evidence);
 }
 
+export async function getActiveTradeCase(sourceConversationId) {
+  if (!sourceConversationId) return null;
+  const result = await query(
+    `SELECT tc.*, row_to_json(m.*) AS machine
+     FROM trade_cases tc
+     LEFT JOIN machines m ON m.trade_case_id = tc.id
+     WHERE tc.source_conversation_id = $1
+       AND tc.archived_at IS NULL
+       AND tc.active = TRUE
+     ORDER BY tc.updated_at DESC
+     LIMIT 1`,
+    [sourceConversationId]
+  );
+  if (!result.rows.length) return null;
+  const row = result.rows[0];
+  return toTradeCase(row, row.machine ? rowToMachine(row.machine) : null, await listEvidence(row.id));
+}
+
 export async function updateTradeCase(id, input = {}) {
   return withTransaction(async client => {
     const existing = await client.query('SELECT * FROM trade_cases WHERE id = $1', [id]);
@@ -203,9 +223,11 @@ export async function addEvidence(id, input = {}) {
   const result = await query(
     `INSERT INTO evidence_items (
       trade_case_id, uploaded_by, media_type, storage_uri,
-      checklist_slot, quality_status, analysis_status, notes
+      checklist_slot, quality_status, analysis_status, notes,
+      original_file_name, content_type, source_message_id, source_attachment_id,
+      metadata_json, checklist_slot_confidence
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
     RETURNING *`,
     [
       id,
@@ -215,7 +237,70 @@ export async function addEvidence(id, input = {}) {
       input.checklistSlot || input.checklist_slot || null,
       input.qualityStatus || input.quality_status || 'pending',
       input.analysisStatus || input.analysis_status || 'pending',
-      input.notes || null
+      input.notes || null,
+      input.originalFileName || input.original_file_name || null,
+      input.contentType || input.content_type || null,
+      input.sourceMessageId || input.source_message_id || null,
+      input.sourceAttachmentId || input.source_attachment_id || null,
+      input.metadata || input.metadata_json || {},
+      input.checklistSlotConfidence ?? input.checklist_slot_confidence ?? null
+    ]
+  );
+  return rowToEvidence(result.rows[0]);
+}
+
+export async function addEvidenceBatch(id, input = {}) {
+  const items = Array.isArray(input.items) ? input.items : Array.isArray(input.evidence) ? input.evidence : [];
+  const created = [];
+  for (const item of items) {
+    const evidence = await addEvidence(id, item);
+    if (!evidence) return null;
+    created.push(evidence);
+  }
+  return { tradeCaseId: id, items: created };
+}
+
+export async function updateEvidence(tradeCaseId, evidenceId, input = {}) {
+  const currentResult = await query(
+    'SELECT * FROM evidence_items WHERE trade_case_id = $1 AND id = $2',
+    [tradeCaseId, evidenceId]
+  );
+  if (!currentResult.rows.length) return null;
+  const current = currentResult.rows[0];
+
+  const result = await query(
+    `UPDATE evidence_items
+     SET uploaded_by = $3,
+         media_type = $4,
+         storage_uri = $5,
+         checklist_slot = $6,
+         quality_status = $7,
+         analysis_status = $8,
+         notes = $9,
+         original_file_name = $10,
+         content_type = $11,
+         source_message_id = $12,
+         source_attachment_id = $13,
+         metadata_json = $14,
+         checklist_slot_confidence = $15
+     WHERE trade_case_id = $1 AND id = $2
+     RETURNING *`,
+    [
+      tradeCaseId,
+      evidenceId,
+      input.uploadedBy ?? input.uploaded_by ?? current.uploaded_by,
+      input.mediaType ?? input.media_type ?? current.media_type,
+      input.storageUri ?? input.storage_uri ?? current.storage_uri,
+      input.checklistSlot ?? input.checklist_slot ?? current.checklist_slot,
+      input.qualityStatus ?? input.quality_status ?? current.quality_status,
+      input.analysisStatus ?? input.analysis_status ?? current.analysis_status,
+      input.notes ?? current.notes,
+      input.originalFileName ?? input.original_file_name ?? current.original_file_name,
+      input.contentType ?? input.content_type ?? current.content_type,
+      input.sourceMessageId ?? input.source_message_id ?? current.source_message_id,
+      input.sourceAttachmentId ?? input.source_attachment_id ?? current.source_attachment_id,
+      input.metadata ?? input.metadata_json ?? current.metadata_json,
+      input.checklistSlotConfidence ?? input.checklist_slot_confidence ?? current.checklist_slot_confidence
     ]
   );
   return rowToEvidence(result.rows[0]);
@@ -229,10 +314,166 @@ export async function listEvidence(id) {
   return result.rows.map(rowToEvidence);
 }
 
+export async function listFindings(id) {
+  const result = await query(
+    `SELECT * FROM analysis_findings
+     WHERE trade_case_id = $1
+     ORDER BY created_at ASC, id ASC`,
+    [id]
+  );
+  return result.rows.map(rowToFinding);
+}
+
+export async function analyzeEvidence(tradeCaseId, evidenceId, input = {}) {
+  return withTransaction(async client => {
+    const tradeCaseResult = await client.query(
+      `SELECT tc.*, row_to_json(m.*) AS machine
+       FROM trade_cases tc
+       LEFT JOIN machines m ON m.trade_case_id = tc.id
+       WHERE tc.id = $1`,
+      [tradeCaseId]
+    );
+    if (!tradeCaseResult.rows.length) return null;
+
+    const evidenceResult = await client.query(
+      'SELECT * FROM evidence_items WHERE trade_case_id = $1 AND id = $2',
+      [tradeCaseId, evidenceId]
+    );
+    if (!evidenceResult.rows.length) return null;
+
+    const tradeCase = toTradeCase(
+      tradeCaseResult.rows[0],
+      tradeCaseResult.rows[0].machine ? rowToMachine(tradeCaseResult.rows[0].machine) : null
+    );
+    const evidence = rowToEvidence(evidenceResult.rows[0]);
+    const inference = await analyzeEvidenceMedia({ evidence, tradeCase, request: input });
+    const normalized = inference.normalized;
+
+    const updatedEvidenceResult = await client.query(
+      `UPDATE evidence_items
+       SET analysis_status = $3,
+           quality_status = $4,
+           checklist_slot = COALESCE($5, checklist_slot),
+           checklist_slot_confidence = $6,
+           metadata_json = metadata_json || $7::jsonb
+       WHERE trade_case_id = $1 AND id = $2
+       RETURNING *`,
+      [
+        tradeCaseId,
+        evidenceId,
+        normalized.analysisStatus || 'complete',
+        normalized.qualityStatus || evidence.qualityStatus,
+        normalized.checklistSlot || input.checklistSlot || input.checklist_slot || null,
+        normalized.checklistSlotConfidence,
+        { visualInference: { provider: inference.provider, model: inference.model, mode: inference.mode, promptVersion: inference.promptVersion } }
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO visual_inference_results (
+        evidence_item_id, trade_case_id, provider, model, mode, prompt_version,
+        request_json, response_json, raw_response_json
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        evidenceId,
+        tradeCaseId,
+        inference.provider,
+        inference.model,
+        inference.mode,
+        inference.promptVersion,
+        input,
+        normalized,
+        inference.rawResponse
+      ]
+    );
+
+    await client.query('DELETE FROM analysis_findings WHERE trade_case_id = $1 AND evidence_item_id = $2', [tradeCaseId, evidenceId]);
+    for (const finding of normalized.visibleConditionFindings || []) {
+      await insertFinding(client, tradeCaseId, evidenceId, {
+        findingType: 'condition',
+        section: finding.section,
+        finding: finding.finding,
+        severity: finding.severity,
+        confidence: finding.confidence,
+        needsFollowUp: finding.needsFollowUp,
+        recommendation: finding.recommendation
+      });
+    }
+    for (const finding of normalized.evidenceQualityFindings || []) {
+      await insertFinding(client, tradeCaseId, evidenceId, {
+        findingType: 'evidence_quality',
+        section: normalized.checklistSlot || evidence.checklistSlot,
+        finding: finding.issue,
+        severity: normalized.qualityStatus === 'needs_retake' ? 'concern' : 'info',
+        confidence: normalized.checklistSlotConfidence,
+        needsFollowUp: Boolean(finding.recommendation),
+        recommendation: finding.recommendation
+      });
+    }
+    for (const uncertainty of normalized.uncertainty || []) {
+      await insertFinding(client, tradeCaseId, evidenceId, {
+        findingType: 'uncertainty',
+        section: normalized.checklistSlot || evidence.checklistSlot,
+        finding: uncertainty,
+        severity: 'info',
+        confidence: null,
+        needsFollowUp: false,
+        recommendation: null
+      });
+    }
+
+    return {
+      evidence: rowToEvidence(updatedEvidenceResult.rows[0]),
+      analysis: normalized,
+      provider: inference.provider,
+      model: inference.model,
+      mode: inference.mode
+    };
+  });
+}
+
 export async function getChecklistStatus(id) {
   const tradeCase = await getTradeCase(id);
   if (!tradeCase) return null;
-  return computeChecklist(tradeCase.machine?.unitType || 'combine', tradeCase.evidenceItems.map(evidenceToDbShape));
+  const checklist = computeChecklist(tradeCase.machine?.unitType || 'combine', tradeCase.evidenceItems.map(evidenceToDbShape));
+  const findings = await listFindings(id);
+  return {
+    ...checklist,
+    visibleConditionFindings: findings.filter(finding => finding.findingType === 'condition'),
+    evidenceQualityFindings: findings.filter(finding => finding.findingType === 'evidence_quality'),
+    uncertaintyFindings: findings.filter(finding => finding.findingType === 'uncertainty')
+  };
+}
+
+export async function generateGuidance(id) {
+  const tradeCase = await getTradeCase(id);
+  if (!tradeCase) return null;
+  const checklist = await getChecklistStatus(id);
+  const conditionFindings = checklist.visibleConditionFindings || [];
+  const qualityFindings = checklist.evidenceQualityFindings || [];
+  const accepted = checklist.acceptedSlots.slice(0, 6);
+  const retake = checklist.retakeSlots.slice(0, 4);
+  const missing = checklist.nextRecommendedSlots.length ? checklist.nextRecommendedSlots : checklist.missingSlots.slice(0, 4);
+  const visibleSummary = conditionFindings.slice(0, 3).map(finding => finding.finding);
+  const limitationSummary = [
+    ...qualityFindings.filter(finding => finding.needsFollowUp).slice(0, 2).map(finding => finding.recommendation || finding.finding),
+    ...(checklist.uncertaintyFindings || []).slice(0, 2).map(finding => finding.finding)
+  ].filter(Boolean);
+
+  const suggestedNextMessage = buildGuidanceMessage({ accepted, retake, missing, visibleSummary, limitationSummary, checklist });
+  return {
+    tradeCaseId: id,
+    route: checklist.complete ? 'fast_path_candidate' : 'needs_more_evidence',
+    packetReady: checklist.complete,
+    acceptedEvidenceSummary: accepted,
+    visibleConditionSummary: visibleSummary,
+    retakeRequests: retake,
+    missingEvidenceRequests: missing.filter(slot => !retake.includes(slot)),
+    uncertaintyAndLimitations: limitationSummary,
+    suggestedNextMessage,
+    checklist
+  };
 }
 
 export async function generatePacket(id) {
@@ -243,6 +484,10 @@ export async function generatePacket(id) {
     tradeCase.machine?.unitType || 'combine',
     tradeCase.evidenceItems.map(evidenceToDbShape)
   );
+  const findings = await listFindings(id);
+  const conditionFindings = findings.filter(finding => finding.findingType === 'condition');
+  const evidenceQualityFindings = findings.filter(finding => finding.findingType === 'evidence_quality');
+  const uncertaintyFindings = findings.filter(finding => finding.findingType === 'uncertainty');
   const route = checklist.complete ? 'fast_path_candidate' : 'needs_more_evidence';
   const nextStep = checklist.complete
     ? 'Centralized used evaluation reviewer should review the draft packet.'
@@ -255,6 +500,9 @@ export async function generatePacket(id) {
     valuationReadiness: checklist.complete ? 'ready_for_review' : 'not_ready',
     machine: tradeCase.machine,
     evidenceCompleteness: checklist,
+    visibleConditionFindings: conditionFindings,
+    evidenceQualityFindings,
+    uncertaintyFindings,
     riskFlags: [],
     reconScenarios: [
       {
@@ -281,7 +529,7 @@ export async function generatePacket(id) {
     ],
     recommendation: {
       preliminaryTradeValue: null,
-      reason: 'Numeric valuation is out of scope for Milestone One.',
+      reason: 'Numeric valuation is out of scope for Milestone Two.',
       nextStep
     }
   };
@@ -328,6 +576,12 @@ function rowToEvidence(row = {}) {
     checklistSlot: row.checklist_slot,
     qualityStatus: row.quality_status,
     analysisStatus: row.analysis_status,
+    originalFileName: row.original_file_name,
+    contentType: row.content_type,
+    sourceMessageId: row.source_message_id,
+    sourceAttachmentId: row.source_attachment_id,
+    metadata: row.metadata_json || {},
+    checklistSlotConfidence: row.checklist_slot_confidence,
     notes: row.notes
   };
 }
@@ -336,8 +590,62 @@ function evidenceToDbShape(row = {}) {
   return {
     id: row.id,
     checklist_slot: row.checklistSlot,
-    quality_status: row.qualityStatus
+    quality_status: row.qualityStatus,
+    analysis_status: row.analysisStatus
   };
+}
+
+function rowToFinding(row = {}) {
+  return {
+    id: row.id,
+    tradeCaseId: row.trade_case_id,
+    evidenceItemId: row.evidence_item_id,
+    createdAt: row.created_at,
+    findingType: row.finding_type,
+    section: row.section,
+    finding: row.finding,
+    severity: row.severity,
+    confidence: row.confidence,
+    needsFollowUp: row.needs_follow_up,
+    recommendation: row.recommendation
+  };
+}
+
+async function insertFinding(client, tradeCaseId, evidenceId, finding) {
+  await client.query(
+    `INSERT INTO analysis_findings (
+      trade_case_id, evidence_item_id, finding_type, section, finding,
+      severity, confidence, needs_follow_up, recommendation
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [
+      tradeCaseId,
+      evidenceId,
+      finding.findingType,
+      finding.section || null,
+      finding.finding,
+      finding.severity || 'info',
+      finding.confidence ?? null,
+      Boolean(finding.needsFollowUp),
+      finding.recommendation || null
+    ]
+  );
+}
+
+function buildGuidanceMessage({ accepted, retake, missing, visibleSummary, limitationSummary, checklist }) {
+  const lines = [];
+  if (accepted.length) lines.push(`Accepted: ${accepted.join(', ')}.`);
+  if (visibleSummary.length) lines.push(`Visible notes: ${visibleSummary.join(' ')}`);
+  if (retake.length) lines.push(`Retake: ${retake.join(', ')}.`);
+  if (missing.length) lines.push(`Still needed: ${missing.filter(slot => !retake.includes(slot)).join(', ')}.`);
+  if (limitationSummary.length) lines.push(`Limitations: ${limitationSummary.join(' ')}`);
+  if (checklist.complete) {
+    lines.push('Next: evidence package is ready for centralized used evaluation review.');
+  } else {
+    const next = checklist.nextRecommendedSlots[0] || checklist.missingSlots[0];
+    lines.push(next ? `Next: please capture ${next}.` : 'Next: continue collecting baseline evidence.');
+  }
+  return lines.join('\n');
 }
 
 function packetToMarkdown(packet) {
@@ -361,6 +669,14 @@ Generated: ${packet.generatedAt}
 - Required: ${packet.evidenceCompleteness.requiredCount}
 - Complete: ${packet.evidenceCompleteness.completeCount}
 - Missing: ${missing}
+
+## Visible Condition Findings
+
+${packet.visibleConditionFindings.length ? packet.visibleConditionFindings.map(finding => `- ${finding.finding}`).join('\n') : '- None recorded yet'}
+
+## Evidence Quality And Limitations
+
+${[...packet.evidenceQualityFindings, ...packet.uncertaintyFindings].length ? [...packet.evidenceQualityFindings, ...packet.uncertaintyFindings].map(finding => `- ${finding.finding}`).join('\n') : '- None recorded yet'}
 
 ## Route
 

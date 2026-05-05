@@ -36,6 +36,8 @@ sudo -u postgres psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='trade_in_agent
 sudo -u postgres psql -tc \"SELECT 1 FROM pg_database WHERE datname='trade_in_agent_dev'\" | grep -q 1 || sudo -u postgres createdb -O trade_in_agent trade_in_agent_dev
 cd '$REMOTE_DIR'
 cp -n infra/local/env.example .env || true
+grep -q '^OPENAI_VISION_MODE=' .env || echo 'OPENAI_VISION_MODE=fixture' >> .env
+grep -q '^OPENAI_VISION_MODEL=' .env || echo 'OPENAI_VISION_MODEL=gpt-5-mini' >> .env
 cd app
 npm install
 npm run migrate

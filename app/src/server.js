@@ -2,13 +2,18 @@ import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import {
   addEvidence,
+  addEvidenceBatch,
+  analyzeEvidence,
   archiveTradeCase,
   createTradeCase,
   generatePacket,
+  generateGuidance,
+  getActiveTradeCase,
   getChecklistStatus,
   getTradeCase,
   healthCheck,
   listTradeCases,
+  updateEvidence,
   updateTradeCase
 } from './repository.js';
 import { closePool } from './db.js';
@@ -69,6 +74,14 @@ export function createServer() {
         return send(res, 200, { items: await listTradeCases({ includeArchived: url.searchParams.get('includeArchived') === 'true' }) });
       }
 
+      if (parts[0] === 'trade-cases' && parts.length === 2 && parts[1] === 'active' && req.method === 'GET') {
+        const sourceConversationId = url.searchParams.get('sourceConversationId');
+        if (!sourceConversationId) return send(res, 400, { error: 'sourceConversationId is required', requestId });
+        const tradeCase = await getActiveTradeCase(sourceConversationId);
+        if (!tradeCase) return send(res, 404, { error: 'Active trade case not found', requestId });
+        return send(res, 200, tradeCase);
+      }
+
       if (parts[0] === 'trade-cases' && parts.length === 2 && req.method === 'GET') {
         const tradeCase = await getTradeCase(parts[1]);
         if (!tradeCase) return send(res, 404, { error: 'Trade case not found', requestId });
@@ -99,10 +112,34 @@ export function createServer() {
         return send(res, 201, evidence);
       }
 
+      if (parts[0] === 'trade-cases' && parts.length === 4 && parts[2] === 'evidence' && parts[3] === 'batch' && req.method === 'POST') {
+        const evidence = await addEvidenceBatch(parts[1], await readJson(req));
+        if (!evidence) return send(res, 404, { error: 'Trade case not found', requestId });
+        return send(res, 201, evidence);
+      }
+
+      if (parts[0] === 'trade-cases' && parts.length === 4 && parts[2] === 'evidence' && req.method === 'PATCH') {
+        const evidence = await updateEvidence(parts[1], parts[3], await readJson(req));
+        if (!evidence) return send(res, 404, { error: 'Evidence item not found', requestId });
+        return send(res, 200, evidence);
+      }
+
+      if (parts[0] === 'trade-cases' && parts.length === 5 && parts[2] === 'evidence' && parts[4] === 'analyze' && req.method === 'POST') {
+        const analysis = await analyzeEvidence(parts[1], parts[3], await readJson(req));
+        if (!analysis) return send(res, 404, { error: 'Trade case or evidence item not found', requestId });
+        return send(res, 200, analysis);
+      }
+
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'checklist' && req.method === 'GET') {
         const checklist = await getChecklistStatus(parts[1]);
         if (!checklist) return send(res, 404, { error: 'Trade case not found', requestId });
         return send(res, 200, checklist);
+      }
+
+      if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'guidance' && req.method === 'POST') {
+        const guidance = await generateGuidance(parts[1]);
+        if (!guidance) return send(res, 404, { error: 'Trade case not found', requestId });
+        return send(res, 200, guidance);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'packet' && req.method === 'POST') {
