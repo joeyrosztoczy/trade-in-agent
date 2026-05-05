@@ -342,9 +342,9 @@ Automated valuation should be staged carefully. Early packets can include valuat
 
 ## Storage Strategy
 
-MVP options:
+MVP storage choices:
 
-- Workflow DB: SQLite first, Postgres when multi-user concurrency or deployment hardening requires it.
+- Workflow DB: Postgres from the start.
 - Media: SharePoint sandbox preferred for durability and human visibility; local cache acceptable for processing.
 - Generated packets: local plus SharePoint output folder.
 
