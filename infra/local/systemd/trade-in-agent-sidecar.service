@@ -1,0 +1,16 @@
+[Unit]
+Description=Trade-In Agent Sidecar
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/openclaw-workspace/trade-in-agent/app
+EnvironmentFile=/home/openclaw/openclaw-workspace/trade-in-agent/.env
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

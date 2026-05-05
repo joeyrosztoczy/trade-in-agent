@@ -1,0 +1,18 @@
+{
+  "name": "trade-in-agent-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "smoke": "node scripts/smoke-test.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {}
+}
