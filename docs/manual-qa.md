@@ -6,7 +6,9 @@ These steps verify the Phase One local foundations without requiring a UI.
 
 ## Multipass QA Path
 
-The current verified path uses the Multipass VM named `trade-in-agent-dev`.
+The sidecar-only verified path uses the Multipass VM named `trade-in-agent-dev`.
+
+The full OpenClaw + sidecar path must be bootstrapped for the VM you want to test. In the most recent integrated QA run, that VM was `trade-in-agent-openclaw-dev`.
 
 ### Full OpenClaw + Sidecar Bootstrap
 
@@ -37,6 +39,14 @@ Validate both services:
 ```bash
 multipass exec trade-in-agent-dev -- sudo systemctl is-active openclaw-gateway
 multipass exec trade-in-agent-dev -- sudo systemctl is-active trade-in-agent-sidecar.service
+```
+
+If you are using the already verified integrated QA VM from the current development machine, run:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- sudo systemctl is-active openclaw-gateway
+multipass exec trade-in-agent-openclaw-dev -- sudo systemctl is-active trade-in-agent-sidecar.service
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
 ```
 
 ### 1. Bootstrap VM
