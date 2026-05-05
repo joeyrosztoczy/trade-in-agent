@@ -274,6 +274,21 @@ For this milestone, the critical path is proving that a Teams-uploaded photo bec
 
 The sidecar should then resolve that reference, analyze the real image with OpenAI, persist evidence metadata, and respond with the case number plus accepted/retake/missing guidance.
 
+Known live trace from May 5, 2026:
+
+- A Teams desktop PNG upload was saved as `/home/openclaw/.openclaw/media/inbound/9a09d4d9-cdf7-4491-a032-264ddafb4a32.png`.
+- The sidecar registered that physical path as evidence and analyzed it with `gpt-5.4-mini` in live mode.
+- OpenClaw also logged a native prompt-image hydration failure because optional dependency `sharp` was missing, with `promptImages=0`.
+
+Before relying on native OpenClaw image prompt blocks, check gateway logs for:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'sudo journalctl -u openclaw-gateway --since "30 minutes ago" --no-pager | grep -Ei "Native image|sharp|promptImages|failed to load"'
+```
+
+The sidecar bridge can still succeed by registering and analyzing the physical OpenClaw media path, but Milestone 2.5 should add a deployment dependency check for `sharp` or another supported image optimization path.
+
 ## Teams Phone QA
 
 In Microsoft Teams on iPhone, DM the Stotz sales agent:

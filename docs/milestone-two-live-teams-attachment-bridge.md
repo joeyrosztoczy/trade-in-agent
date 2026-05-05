@@ -100,6 +100,64 @@ It explicitly ignores `teams://...` placeholders and does not yet resolve:
 
 That means live Teams uploads may reach OpenClaw correctly but still fail to become analyzable evidence inside the trade-in sidecar.
 
+### Live QA Trace: May 5, 2026
+
+After creating this milestone, Codex used the local Microsoft Teams desktop app to send a harmless generated PNG to the Stotz Sales Agent direct chat.
+
+Message:
+
+```text
+Live QA from Codex desktop: attaching a harmless generated PNG to trace Teams -> OpenClaw inbound media for Milestone 2.5. Please do not treat this as a real machine photo.
+```
+
+Observed OpenClaw inbound media:
+
+```text
+/home/openclaw/.openclaw/media/inbound/9a09d4d9-cdf7-4491-a032-264ddafb4a32.png
+```
+
+Observed sidecar evidence row:
+
+```text
+evidenceId: da371565-ae71-4220-9401-5eaeade18881
+storageUri: /home/openclaw/.openclaw/media/inbound/9a09d4d9-cdf7-4491-a032-264ddafb4a32.png
+contentType: image/png
+originalFileName: 9a09d4d9-cdf7-4491-a032-264ddafb4a32.png
+```
+
+Observed inference:
+
+```text
+provider: openai
+model: gpt-5.4-mini
+mode: live
+qualityStatus: rejected
+analysisStatus: complete
+```
+
+Useful result:
+
+- The Teams desktop upload did reach OpenClaw.
+- OpenClaw saved the upload to the managed inbound media folder.
+- The trade-in sidecar/plugin path registered the physical media path and successfully sent it to the OpenAI API.
+- OpenAI correctly rejected the generated test graphic as non-machine evidence.
+
+Important blocker:
+
+- The embedded OpenClaw agent also tried to hydrate the uploaded image as a native prompt image and logged:
+
+  ```text
+  Native image: failed to load /home/openclaw/.openclaw/media/inbound/9a09d4d9-cdf7-4491-a032-264ddafb4a32.png: Failed to optimize image: Optional dependency sharp is required for image attachment processing
+  ```
+
+- The same run reported `promptImages=0`.
+
+Implication:
+
+- The sidecar path can work with physical OpenClaw media paths today.
+- Native OpenClaw image prompt hydration on the Stotz VM needs a `sharp` dependency check/fix before we can rely on the base agent seeing Teams images directly.
+- Milestone 2.5 should keep the sidecar bridge explicit and add a deployment QA check for OpenClaw image hydration dependencies.
+
 ## Product Slice
 
 > A sales rep starts or resumes a trade case in the Stotz Sales Agent Teams DM, uploads field photos from an iPhone, and the agent uses the sidecar to inspect those exact images through the OpenAI API before asking for the next best evidence.
@@ -127,6 +185,7 @@ Next: please send the rear 45 and serial plate photos.
 8. Regression tests for OpenClaw media references and denied unsafe paths.
 9. Manual QA path for iPhone Teams uploads.
 10. Deployment/runbook updates for the Stotz VM.
+11. Deployment QA check for OpenClaw native image hydration dependencies, especially `sharp`.
 
 ## Sidecar Media Resolver
 
@@ -249,6 +308,7 @@ Milestone 2.5 is complete when:
 - The evidence row stores original Teams/OpenClaw metadata and the normalized storage reference.
 - The agent reply includes the case number and a concise accepted/retake/missing summary.
 - Unsupported video files produce a clear next-step response rather than a silent failure.
+- OpenClaw gateway logs do not show native image hydration failures such as missing `sharp`, or the sidecar bridge explicitly bypasses that path and documents the bypass.
 - No secrets, tokens, signed media URLs, or raw Authorization headers are written to docs, commits, or logs.
 
 ## Manual QA Path
@@ -357,6 +417,7 @@ Expected:
 3. Extend visual inference input resolution to support `media://inbound/...` and `file://` under allowlisted roots.
 4. Extend evidence registration docs/examples to include OpenClaw media metadata.
 5. Update agent route instructions to prioritize attachment extraction and sidecar analysis.
-6. Add live QA trace commands to the Stotz deployment runbook.
-7. Deploy to Stotz and run the iPhone Teams direct-message test.
-8. Decide whether video sampling is in-scope for the first live test or deferred with explicit fallback guidance.
+6. Add a deployment check/fix for OpenClaw native image hydration dependencies such as `sharp`.
+7. Add live QA trace commands to the Stotz deployment runbook.
+8. Deploy to Stotz and run the iPhone Teams direct-message test.
+9. Decide whether video sampling is in-scope for the first live test or deferred with explicit fallback guidance.
