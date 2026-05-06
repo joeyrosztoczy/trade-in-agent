@@ -226,6 +226,42 @@ Use the review model by passing `analysisMode: "high_risk"`, `analysisMode: "rev
 
 Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path when deployment secrets are unavailable.
 
+## Realistic Sales-Rep User Flow QA
+
+The realistic user-flow runner simulates a sales rep uploading a partial combine walkaround and then a fuller walkaround with startup-video evidence represented by sampled frames.
+
+The media source set is documented in [docs/qa/realistic-combine-media-sources.md](qa/realistic-combine-media-sources.md), and the first reference run is summarized in [docs/qa/initial-user-qa-summary.md](qa/initial-user-qa-summary.md).
+
+Run it on the integrated OpenClaw + sidecar VM:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'sudo systemctl restart trade-in-agent-sidecar'
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && npm test'
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && npm run qa:user-flow'
+```
+
+Expected:
+
+- JSON summary with `ok: true`
+- two scenarios: `partial-field-walkaround` and `full-walkaround-with-startup-video`
+- guidance includes case number and friendly checklist names
+- guidance has no raw slot ids such as `front_45`
+- packet includes reviewer brief and readable evidence summary
+- startup-video scenario captures the sampled-frame/audio limitation and asks for a real startup clip when needed
+
+Artifacts are written inside the VM under:
+
+```text
+/home/ubuntu/qa-output/<run-id>/
+```
+
+For local host runs with a reachable sidecar:
+
+```bash
+cd app
+SIDECAR_URL=http://127.0.0.1:8788 npm run qa:user-flow
+```
+
 ## Host QA Path
 
 Host QA requires Postgres reachable via `DATABASE_URL`.

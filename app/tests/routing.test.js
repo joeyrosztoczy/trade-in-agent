@@ -88,6 +88,63 @@ test('visible mechanical risk escalates to technician inspection', () => {
   assert.ok(decision.targetedFollowUpQuestions.some(question => question.includes('hydraulic leak')));
 });
 
+test('weak startup video asks for a specific field-friendly retake', () => {
+  const checklist = computeChecklist('combine', [
+    ...completeEvidence('combine').filter(item => item.checklist_slot !== 'startup_video'),
+    {
+      id: 'startup-video-evidence',
+      checklist_slot: 'startup_video',
+      quality_status: 'weak',
+      analysis_status: 'complete'
+    }
+  ]);
+
+  const decision = computeRoutingDecision({
+    tradeCase: combineCase(),
+    checklist,
+    findings: [
+      {
+        findingType: 'uncertainty',
+        severity: 'info',
+        finding: 'Sampled frames do not verify audio or true cold-start behavior.'
+      }
+    ]
+  });
+
+  assert.equal(decision.route, 'needs_more_evidence');
+  assert.ok(decision.targetedFollowUpQuestions.some(question => question.includes('cold start')));
+  assert.ok(decision.confidence > 0.4);
+});
+
+test('evidence quality warnings do not double-count as visible condition severity', () => {
+  const checklist = computeChecklist('combine', [
+    ...completeEvidence('combine').filter(item => item.checklist_slot !== 'engine_compartment'),
+    {
+      id: 'engine-compartment-evidence',
+      checklist_slot: 'engine_compartment',
+      quality_status: 'weak',
+      analysis_status: 'complete'
+    }
+  ]);
+
+  const decision = computeRoutingDecision({
+    tradeCase: combineCase(),
+    checklist,
+    findings: [
+      {
+        findingType: 'evidence_quality',
+        section: 'engine_compartment',
+        severity: 'concern',
+        finding: 'The engine compartment image is partially shadowed and should be clearer.'
+      }
+    ]
+  });
+
+  assert.equal(decision.route, 'needs_more_evidence');
+  assert.equal(decision.confidenceFactors.severityCounts.concern, 0);
+  assert.ok(decision.confidence > 0.45);
+});
+
 test('rejected wrong-subject media stays in evidence collection instead of technician escalation', () => {
   const checklist = computeChecklist('combine', [
     {

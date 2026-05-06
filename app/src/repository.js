@@ -2,6 +2,13 @@ import { query, withTransaction } from './db.js';
 import { computeChecklist, normalizeUnitType } from './checklists.js';
 import { analyzeEvidenceMedia } from './visualInference.js';
 import { computeRoutingDecision } from './routing.js';
+import {
+  buildGuidanceMessage,
+  buildReviewerBrief,
+  describeChecklistSlots,
+  evidenceRequestsForSlots,
+  packetToMarkdown
+} from './presentation.js';
 
 function toTradeCase(row, machine = null, evidenceItems = undefined) {
   return {
@@ -504,13 +511,15 @@ export async function generateGuidance(id) {
   await persistRoutingDecision(id, routing);
   const conditionFindings = checklist.visibleConditionFindings || [];
   const qualityFindings = checklist.evidenceQualityFindings || [];
-  const accepted = checklist.acceptedSlots.slice(0, 6);
+  const unitType = checklist.unitType || tradeCase.machine?.unitType || 'combine';
+  const accepted = checklist.acceptedSlots;
   const retake = checklist.retakeSlots.slice(0, 4);
   const missing = routing.nextEvidenceRequests.length
     ? routing.nextEvidenceRequests.map(request => request.slot)
     : checklist.nextRecommendedSlots.length
       ? checklist.nextRecommendedSlots
       : checklist.missingSlots.slice(0, 4);
+  const missingWithoutRetake = missing.filter(slot => !retake.includes(slot));
   const visibleSummary = conditionFindings.slice(0, 3).map(finding => finding.finding);
   const limitationSummary = [
     ...qualityFindings.filter(finding => finding.needsFollowUp).slice(0, 2).map(finding => finding.recommendation || finding.finding),
@@ -529,10 +538,13 @@ export async function generateGuidance(id) {
     packetReady: routing.packetReady,
     routeReason: routing.routeReason,
     riskFlags: routing.riskFlags,
-    acceptedEvidenceSummary: accepted,
+    acceptedEvidenceSlots: accepted,
+    acceptedEvidenceSummary: describeChecklistSlots(unitType, accepted, checklist),
     visibleConditionSummary: visibleSummary,
-    retakeRequests: retake,
-    missingEvidenceRequests: missing.filter(slot => !retake.includes(slot)),
+    retakeRequestSlots: retake,
+    retakeRequests: evidenceRequestsForSlots(unitType, retake, checklist),
+    missingEvidenceRequestSlots: missingWithoutRetake,
+    missingEvidenceRequests: evidenceRequestsForSlots(unitType, missingWithoutRetake, checklist),
     nextEvidenceRequests: routing.nextEvidenceRequests,
     targetedFollowUpQuestions: routing.targetedFollowUpQuestions,
     escalationReasons: routing.escalationReasons,
@@ -589,6 +601,12 @@ export async function generatePacket(id) {
     valuationReadiness: routing.packetReady && routing.route !== 'technician_inspection_required' ? 'ready_for_review' : 'hold_or_incomplete',
     machine: tradeCase.machine,
     evidenceCompleteness: checklist,
+    evidenceCompletenessSummary: {
+      accepted: describeChecklistSlots(checklist.unitType, checklist.acceptedSlots, checklist, { limit: 12 }),
+      missing: describeChecklistSlots(checklist.unitType, checklist.missingSlots, checklist, { limit: 12 }),
+      retake: describeChecklistSlots(checklist.unitType, checklist.retakeSlots, checklist, { limit: 12 }),
+      weak: describeChecklistSlots(checklist.unitType, checklist.weakSlots, checklist, { limit: 12 })
+    },
     visibleConditionFindings: conditionFindings,
     evidenceQualityFindings,
     uncertaintyFindings,
@@ -624,6 +642,7 @@ export async function generatePacket(id) {
       nextStep
     }
   };
+  packet.reviewerBrief = buildReviewerBrief(packet);
 
   const result = await query(
     `INSERT INTO packets (trade_case_id, packet_json, packet_markdown)
@@ -736,84 +755,4 @@ async function insertFinding(client, tradeCaseId, evidenceId, finding) {
       finding.recommendation || null
     ]
   );
-}
-
-function buildGuidanceMessage({ caseNumber, accepted, retake, missing, visibleSummary, limitationSummary, checklist, routing }) {
-  const lines = [];
-  if (caseNumber) lines.push(`Trade case ${caseNumber}.`);
-  if (routing?.route) lines.push(`Route: ${routing.route} (${Math.round((routing.confidence || 0) * 100)}% confidence).`);
-  if (accepted.length) lines.push(`Accepted: ${accepted.join(', ')}.`);
-  if (visibleSummary.length) lines.push(`Visible notes: ${visibleSummary.join(' ')}`);
-  if (retake.length) lines.push(`Retake: ${retake.join(', ')}.`);
-  if (missing.length) lines.push(`Still needed: ${missing.filter(slot => !retake.includes(slot)).join(', ')}.`);
-  if (limitationSummary.length) lines.push(`Limitations: ${limitationSummary.join(' ')}`);
-  if (routing?.routeReason) lines.push(`Why: ${routing.routeReason}`);
-  if (routing?.route === 'technician_inspection_required') {
-    lines.push('Next: hold valuation approval and route this case for licensed-technician inspection or equivalent mechanical review.');
-  } else if (routing?.packetReady || checklist.complete) {
-    lines.push('Next: evidence package is ready for centralized used evaluation review.');
-  } else {
-    const next = routing?.nextEvidenceRequests?.[0]?.description || checklist.nextRecommendedSlots[0] || checklist.missingSlots[0];
-    lines.push(next ? `Next: please capture ${next}.` : 'Next: continue collecting baseline evidence.');
-  }
-  return lines.join('\n');
-}
-
-function packetToMarkdown(packet) {
-  const missing = packet.evidenceCompleteness.missingSlots.length
-    ? packet.evidenceCompleteness.missingSlots.join(', ')
-    : 'None';
-  const riskFlags = packet.riskFlags.length
-    ? packet.riskFlags.map(flag => `- [${flag.severity}] ${flag.message}`).join('\n')
-    : '- None recorded';
-  const followUps = packet.targetedFollowUpQuestions.length
-    ? packet.targetedFollowUpQuestions.map(question => `- ${question}`).join('\n')
-    : '- None';
-
-  return `# Trade Evaluation Draft Packet
-
-Case: ${packet.caseNumber || packet.tradeCaseId}
-
-Generated: ${packet.generatedAt}
-
-## Machine
-
-- Unit type: ${packet.machine?.unitType || 'unknown'}
-- Make: ${packet.machine?.make || 'unknown'}
-- Model: ${packet.machine?.model || 'unknown'}
-- Serial/PIN: ${packet.machine?.serialOrPin || 'unknown'}
-
-## Evidence Completeness
-
-- Required: ${packet.evidenceCompleteness.requiredCount}
-- Complete: ${packet.evidenceCompleteness.completeCount}
-- Missing: ${missing}
-
-## Visible Condition Findings
-
-${packet.visibleConditionFindings.length ? packet.visibleConditionFindings.map(finding => `- ${finding.finding}`).join('\n') : '- None recorded yet'}
-
-## Evidence Quality And Limitations
-
-${[...packet.evidenceQualityFindings, ...packet.uncertaintyFindings].length ? [...packet.evidenceQualityFindings, ...packet.uncertaintyFindings].map(finding => `- ${finding.finding}`).join('\n') : '- None recorded yet'}
-
-## Route
-
-- Route: ${packet.route}
-- Review status: ${packet.reviewStatus}
-- Confidence: ${Math.round((packet.confidence || 0) * 100)}%
-- Reason: ${packet.routeReason}
-
-## Risk Flags
-
-${riskFlags}
-
-## Reviewer / Field Follow-Up Questions
-
-${followUps}
-
-## Recommendation
-
-${packet.recommendation.nextStep}
-`;
 }

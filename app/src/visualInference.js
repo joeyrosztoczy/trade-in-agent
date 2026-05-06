@@ -1,13 +1,21 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const PROMPT_VERSION = 'phase-two-field-evidence-v1';
+const PROMPT_VERSION = 'phase-two-field-evidence-v2';
 
-function defaultFixture(evidence = {}, tradeCase = {}) {
+function defaultFixture(evidence = {}, tradeCase = {}, request = {}) {
   const slot = evidence.checklistSlot || 'unknown';
   const machine = tradeCase.machine || {};
   const isDark = String(evidence.notes || evidence.storageUri || '').toLowerCase().includes('dark');
-  const qualityStatus = isDark ? 'needs_retake' : 'accepted';
+  const isStartupVideo = evidence.mediaType === 'video' || slot === 'startup_video';
+  const sampledFrameCount = Array.isArray(request.sampledFrames) ? request.sampledFrames.length : 0;
+  const qualityStatus = isDark ? 'needs_retake' : isStartupVideo && sampledFrameCount <= 1 ? 'weak' : 'accepted';
+  const uncertainty = [
+    'Fixture mode does not perform real image analysis.'
+  ];
+  if (isStartupVideo) {
+    uncertainty.push('Startup video is represented by sampled frame evidence only; audio, smoke under load, warning tones, and true cold-start behavior are not verified.');
+  }
 
   return {
     provider: 'fixture',
@@ -32,15 +40,17 @@ function defaultFixture(evidence = {}, tradeCase = {}) {
         {
           issue: qualityStatus === 'needs_retake'
             ? 'Fixture review marked the image as too dark for reliable condition review.'
+            : qualityStatus === 'weak'
+              ? 'Fixture review marked the startup video evidence as usable only with low confidence from sampled frames.'
             : 'Fixture review marked the image as usable for field evidence.',
           recommendation: qualityStatus === 'needs_retake'
             ? 'Ask for a brighter retake of this checklist slot.'
+            : qualityStatus === 'weak'
+              ? 'Ask for a short startup clip that captures cold start, idle, exhaust, warning lights, and any abnormal sound if safe to record.'
             : 'Continue collecting the remaining baseline evidence.'
         }
       ],
-      uncertainty: [
-        'Fixture mode does not perform real image analysis.'
-      ],
+      uncertainty,
       retakeReason: qualityStatus === 'needs_retake' ? 'Image appears too dark for useful review.' : null,
       nextEvidenceNeeded: []
     },
@@ -50,7 +60,7 @@ function defaultFixture(evidence = {}, tradeCase = {}) {
 
 export async function analyzeEvidenceMedia({ evidence, tradeCase, request = {} }) {
   const mode = process.env.OPENAI_VISION_MODE || (process.env.OPENAI_API_KEY ? 'live' : 'fixture');
-  if (mode === 'fixture') return defaultFixture(evidence, tradeCase);
+  if (mode === 'fixture') return defaultFixture(evidence, tradeCase, request);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -143,6 +153,7 @@ severity: info, watch, concern, severe.
 
 Separate what is visibly supported by the image from what cannot be verified.
 Do not estimate trade value. Do not claim a full mechanical diagnosis.
+For startup_video or other video evidence, you may receive sampled frames rather than the full video/audio stream. Do not claim audio quality, true cold-start behavior, warning tones, smoke timing, idle smoothness, or abnormal sound unless the provided evidence directly supports it. If the frames do not show enough startup context, mark qualityStatus as weak, add a clear uncertainty, and ask for a short video that captures cold start, idle, exhaust, warning lights, and abnormal sound if safe to record.
 
 Machine context:
 ${JSON.stringify(machine)}
@@ -226,7 +237,7 @@ function normalizeModelOutput(text, evidence) {
     checklistSlotConfidence: clampConfidence(parsed.checklistSlotConfidence),
     visibleConditionFindings: normalizeFindings(parsed.visibleConditionFindings, 'condition'),
     evidenceQualityFindings: normalizeQualityFindings(parsed.evidenceQualityFindings),
-    uncertainty: Array.isArray(parsed.uncertainty) ? parsed.uncertainty.map(String) : [],
+    uncertainty: Array.isArray(parsed.uncertainty) ? parsed.uncertainty.map(textValue).filter(Boolean) : [],
     retakeReason: parsed.retakeReason || null,
     nextEvidenceNeeded: Array.isArray(parsed.nextEvidenceNeeded) ? parsed.nextEvidenceNeeded.map(String) : []
   };
@@ -261,4 +272,19 @@ function normalizeQualityFindings(items) {
     issue: String(item.issue || item.finding || ''),
     recommendation: item.recommendation || null
   })).filter(item => item.issue);
+}
+
+function textValue(item) {
+  if (item == null) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item === 'number' || typeof item === 'boolean') return String(item);
+  return String(
+    item.uncertainty ||
+    item.limitation ||
+    item.issue ||
+    item.finding ||
+    item.reason ||
+    item.recommendation ||
+    JSON.stringify(item)
+  );
 }

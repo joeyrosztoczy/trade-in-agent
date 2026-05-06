@@ -44,7 +44,9 @@ export function computeRoutingDecision({ tradeCase = {}, checklist = {}, finding
   const retakeSlots = arrayOf(checklist.retakeSlots);
   const weakSlots = arrayOf(checklist.weakSlots);
   const rejectedCount = Number(checklist.rejectedCount || 0);
-  const routeFindings = findings.filter(finding => !isUnsupportedEvidenceFinding(finding));
+  const routeFindings = findings
+    .filter(finding => finding.findingType === 'condition')
+    .filter(finding => !isUnsupportedEvidenceFinding(finding));
   const severityCounts = countSeverities(routeFindings);
   const highRiskFindings = routeFindings.filter(isHighRiskFinding);
   const identityMissing = !machine.serialOrPin;
@@ -254,6 +256,10 @@ function buildFollowUpQuestions({ unitType, machine, highRiskFindings, nextEvide
   for (const request of nextEvidenceRequests) {
     if (request.reason.startsWith('retake')) {
       questions.push(`Please retake ${request.description} with brighter light, the whole area in frame, and a close-up of any visible issue.`);
+    } else if (request.slot === 'startup_video') {
+      questions.push('Please send a short startup video that captures cold start, idle, exhaust, warning lights, and any abnormal sound if safe to record.');
+    } else if (request.reason.includes('low confidence')) {
+      questions.push(`Please send a clearer ${request.description} so the evaluator can rely on it without guessing.`);
     } else {
       questions.push(`Please send ${request.description}.`);
     }
@@ -287,6 +293,7 @@ function computeConfidence({
   identityMissing,
   hoursMissing
 }) {
+  const cappedUncertaintyCount = Math.min(uncertaintyCount, 6);
   const score = 0.28 +
     acceptedRatio * 0.5 -
     missingCount * 0.045 -
@@ -296,7 +303,7 @@ function computeConfidence({
     severityCounts.severe * 0.22 -
     severityCounts.concern * 0.09 -
     severityCounts.watch * 0.035 -
-    uncertaintyCount * 0.025 -
+    cappedUncertaintyCount * 0.012 -
     (identityMissing ? 0.08 : 0) -
     (hoursMissing ? 0.06 : 0);
 
