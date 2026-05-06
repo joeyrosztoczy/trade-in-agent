@@ -172,6 +172,34 @@ test('rejected wrong-subject media stays in evidence collection instead of techn
   assert.ok(decision.riskFlags.some(flag => flag.code === 'rejected_evidence'));
 });
 
+test('portrait or artwork evidence does not trigger mechanical escalation', () => {
+  const checklist = computeChecklist('combine', [
+    {
+      id: 'portrait',
+      checklist_slot: 'front_45',
+      quality_status: 'rejected',
+      analysis_status: 'complete'
+    }
+  ]);
+
+  const decision = computeRoutingDecision({
+    tradeCase: combineCase(),
+    checklist,
+    findings: [
+      {
+        findingType: 'condition',
+        severity: 'severe',
+        finding: 'Visible content appears to be a painted portrait of a seated woman, not equipment evidence.'
+      }
+    ]
+  });
+
+  assert.equal(decision.route, 'needs_more_evidence');
+  assert.equal(decision.reviewStatus, 'field_collection');
+  assert.ok(decision.riskFlags.some(flag => flag.code === 'rejected_evidence'));
+  assert.ok(!decision.riskFlags.some(flag => flag.code === 'visible_severe_condition'));
+});
+
 function combineCase() {
   return {
     machine: {

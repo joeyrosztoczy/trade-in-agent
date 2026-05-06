@@ -1,5 +1,5 @@
 const baseUrl = process.env.SIDECAR_URL || 'http://127.0.0.1:8788';
-const liveSmokeImageUrl = process.env.OPENAI_VISION_SMOKE_IMAGE_URL || 'https://api.nga.gov/iiif/a2e6da57-3cd1-4235-b20e-95dcaefed6c8/full/!800,800/0/default.jpg';
+const liveSmokeImageUrl = process.env.OPENAI_VISION_SMOKE_IMAGE_URL || 'https://photos.machinefinder.com/96/11033496/73087499_large_48294.jpg';
 const liveVision = process.env.OPENAI_VISION_MODE === 'live';
 
 async function request(path, options = {}) {

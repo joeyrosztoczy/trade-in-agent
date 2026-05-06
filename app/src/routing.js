@@ -29,7 +29,8 @@ const HIGH_RISK_SLOTS = new Set([
 
 const UNSUPPORTED_EVIDENCE_PATTERNS = [
   /\b(does not show|doesn't show|not show|not visible|not present)\b/i,
-  /\b(unrelated|wrong subject|not valid trade-in evidence|not a .*machine|not a .*combine|not a .*tractor)\b/i,
+  /\b(unrelated|wrong subject|not valid trade-in evidence|not equipment evidence|not a .*machine|not a .*combine|not a .*tractor)\b/i,
+  /\b(portrait|person|people|human|seated woman|seated man|painted|artwork|painting)\b/i,
   /\b(no .*combine .*visible|no .*tractor .*visible|no .*machine .*visible)\b/i,
   /\b(cannot support|can't support|insufficient for|not usable for)\b/i
 ];
