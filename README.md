@@ -70,6 +70,7 @@ Supporting docs:
 - [docs/milestone-three-analysis-routing.md](docs/milestone-three-analysis-routing.md) specifies the evidence-to-route decision layer.
 - [docs/qa/initial-user-qa-summary.md](docs/qa/initial-user-qa-summary.md) summarizes the first realistic sales-rep and used-team QA run.
 - [docs/qa/realistic-combine-media-sources.md](docs/qa/realistic-combine-media-sources.md) lists the public combine photo/video sources used by the QA runner.
+- [docs/qa/stotz-sales-live-replay-2026-05-06.md](docs/qa/stotz-sales-live-replay-2026-05-06.md) records the Stotz Sales VM deployment and Teams replay path.
 - [docs/stotz-corp-sales-deployment-runbook.md](docs/stotz-corp-sales-deployment-runbook.md) gives the live Stotz corporate sales deployment and Teams phone QA runbook.
 - [docs/session-log-summary.md](docs/session-log-summary.md) summarizes the key remote Teams/session history.
 - [agent/TRADE-IN-TOOLS.md](agent/TRADE-IN-TOOLS.md) gives the OpenClaw-facing sidecar tool contract.
