@@ -10,6 +10,7 @@ import {
   generateGuidance,
   getActiveTradeCase,
   getChecklistStatus,
+  getProcessingStatus,
   getRoutingStatus,
   getTradeCase,
   healthCheck,
@@ -135,6 +136,12 @@ export function createServer() {
         const checklist = await getChecklistStatus(parts[1]);
         if (!checklist) return send(res, 404, { error: 'Trade case not found', requestId });
         return send(res, 200, checklist);
+      }
+
+      if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'processing-status' && req.method === 'GET') {
+        const status = await getProcessingStatus(parts[1]);
+        if (!status) return send(res, 404, { error: 'Trade case not found', requestId });
+        return send(res, 200, status);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'guidance' && req.method === 'POST') {

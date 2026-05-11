@@ -403,6 +403,20 @@ Likely responsibilities:
 - pricing/recon analytics
 - exception reporting
 
+## Recorded Milestone Specs
+
+Milestone numbers identify the recorded implementation specs. Phase numbers describe the product area, so they do not always match one-for-one.
+
+| Milestone | Spec | Product area |
+|---|---|---|
+| M1 | [Local Development Bootstrap](milestone-one-local-dev-bootstrap.md) | Phase 1 local foundations |
+| M2 | [Teams Evidence Loop](milestone-two-teams-evidence-loop.md) | Phase 2 Teams evidence loop |
+| M2.5 | [Live Teams Attachment Bridge](milestone-two-live-teams-attachment-bridge.md) | Phase 2 live Teams/OpenClaw media bridge |
+| M3 | [Analysis And Routing](milestone-three-analysis-routing.md) | Phase 3 evidence-to-route decision layer |
+| M3.5 | [API Contract And OpenClaw Boundary Hardening](milestone-boundary-hardening.md) | Boundary hardening after Phase 3 |
+| M4 | [Demo Valuation And Recon Estimate](milestone-demo-valuation-recon.md) | Lightweight start to Phase 5 valuation/recon |
+| M5 | [Async Evidence Processing And Field Acknowledgements](milestone-async-evidence-processing.md) | Field-performance hardening for the evidence loop |
+
 ## Implementation Phases
 
 ### Phase 1: Local Foundations
@@ -436,6 +450,17 @@ Milestone 2.5, [Live Teams Attachment Bridge](milestone-two-live-teams-attachmen
 
 Milestone 3, [Analysis And Routing](milestone-three-analysis-routing.md), implements the first sidecar-owned route decision layer and persists review status, confidence, risk flags, route reason, and targeted field follow-up questions.
 
+### Phase 3.5: API Contract And OpenClaw Boundary Hardening
+
+- Add sidecar request and response schemas.
+- Generate an OpenAPI contract from the schemas.
+- Add contract tests for every agent-facing endpoint.
+- Introduce stable OpenClaw tool names for the trade-in workflow.
+- Scaffold a versioned OpenClaw plugin/tool adapter owned by this repo.
+- Reduce `openclaw-on-azure` touchpoints to deployment config, secrets, permissions, VM shape, and rollout.
+
+Milestone 3.5, [API Contract And OpenClaw Boundary Hardening](milestone-boundary-hardening.md), makes the sidecar contract explicit and keeps day-to-day product work inside this repo.
+
 ### Phase 4: Review UI
 
 - Build a small web UI on the VM for internal reviewers.
@@ -449,6 +474,8 @@ Milestone 3, [Analysis And Routing](milestone-three-analysis-routing.md), implem
 - Produce payload examples from real MVP cases.
 - Document required credentials, APIs, and approval boundaries.
 
+Milestone 4, [Demo Valuation And Recon Estimate](milestone-demo-valuation-recon.md), starts Phase 5 lightly by adding a feature-flagged demo valuation/recon adapter, GPT-5.5 live web research for public comparable listings, fallback fixture comps for offline QA, and the first `integration_jobs` table. This gives field QA an end-to-end packet without representing the output as an approved offer.
+
 ### Phase 6: Hardening
 
 - Run app service under systemd.
@@ -456,6 +483,8 @@ Milestone 3, [Analysis And Routing](milestone-three-analysis-routing.md), implem
 - Add backup/restore procedure.
 - Add permissions and access model.
 - Add deployment docs for the Stotz Sales VM.
+
+Milestone 5, [Async Evidence Processing And Field Acknowledgements](milestone-async-evidence-processing.md), addresses live field latency discovered during field QA by splitting evidence registration from media inference. The Teams agent should acknowledge uploads immediately with the case number and next field ask, while sidecar-owned background jobs or OpenClaw sub-agents process photos/video in parallel and persist structured findings.
 
 ## Open Questions
 

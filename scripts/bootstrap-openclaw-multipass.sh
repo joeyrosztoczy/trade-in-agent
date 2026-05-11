@@ -75,6 +75,7 @@ if [[ -f "$SECRETS_FILE" ]] && jq -e '.OPENAI_API_KEY? // empty' "$SECRETS_FILE"
     } > .env
     rm -f "$tmp"
     sudo systemctl restart trade-in-agent-sidecar.service
+    sudo systemctl restart trade-in-agent-worker.service
   '
 else
   echo "OpenClaw deployment secrets did not contain OPENAI_API_KEY; leaving sidecar in configured vision mode."
@@ -85,5 +86,7 @@ echo "Validate OpenClaw:"
 echo "  multipass exec $VM_NAME -- sudo systemctl is-active openclaw-gateway"
 echo "Validate sidecar:"
 echo "  multipass exec $VM_NAME -- sudo systemctl is-active trade-in-agent-sidecar.service"
+echo "Validate worker:"
+echo "  multipass exec $VM_NAME -- sudo systemctl is-active trade-in-agent-worker.service"
 echo "Run sidecar smoke test:"
 echo "  multipass exec $VM_NAME -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'"

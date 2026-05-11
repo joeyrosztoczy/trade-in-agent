@@ -25,6 +25,8 @@ test('fixture visual inference returns normalized field guidance', async () => {
   assert.equal(result.normalized.qualityStatus, 'accepted');
   assert.equal(result.normalized.checklistSlot, 'front_45');
   assert.ok(result.normalized.visibleConditionFindings.length > 0);
+  assert.match(result.normalized.visibleConditionFindings[0].finding, /Front 45-degree view/);
+  assert.doesNotMatch(result.normalized.visibleConditionFindings[0].finding, /front_45/);
 });
 
 test('fixture visual inference can request a retake', async () => {

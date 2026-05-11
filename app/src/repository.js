@@ -1,14 +1,19 @@
 import { query, withTransaction } from './db.js';
 import { computeChecklist, normalizeUnitType } from './checklists.js';
+import { generateDemoValuation, isDemoValuationEnabled } from './demoValuation.js';
 import { analyzeEvidenceMedia } from './visualInference.js';
 import { computeRoutingDecision } from './routing.js';
 import {
   buildGuidanceMessage,
+  buildProcessingAcknowledgementMessage,
   buildReviewerBrief,
   describeChecklistSlots,
   evidenceRequestsForSlots,
   packetToMarkdown
 } from './presentation.js';
+
+const DEFAULT_ANALYSIS_JOB_TYPE = 'field_evidence_quality';
+const READY_JOB_STATUSES = ['queued', 'failed_retryable'];
 
 function toTradeCase(row, machine = null, evidenceItems = undefined) {
   return {
@@ -55,7 +60,13 @@ function machinePayload(input = {}) {
 
 export async function healthCheck() {
   const result = await query('SELECT NOW() AS now');
-  return { ok: true, databaseTime: result.rows[0].now };
+  let analysisQueue = null;
+  try {
+    analysisQueue = await summarizeAnalysisQueue();
+  } catch (error) {
+    analysisQueue = { available: false, error: error.message };
+  }
+  return { ok: true, databaseTime: result.rows[0].now, analysisQueue };
 }
 
 export async function createTradeCase(input = {}) {
@@ -253,6 +264,18 @@ export async function addEvidence(id, input = {}) {
   const exists = await query('SELECT id FROM trade_cases WHERE id = $1', [id]);
   if (!exists.rows.length) return null;
 
+  const sourceAttachmentId = input.sourceAttachmentId || input.source_attachment_id || null;
+  if (sourceAttachmentId) {
+    const existing = await query(
+      `SELECT * FROM evidence_items
+       WHERE trade_case_id = $1 AND source_attachment_id = $2
+       ORDER BY uploaded_at DESC
+       LIMIT 1`,
+      [id, sourceAttachmentId]
+    );
+    if (existing.rows.length) return rowToEvidence(existing.rows[0]);
+  }
+
   const result = await query(
     `INSERT INTO evidence_items (
       trade_case_id, uploaded_by, media_type, storage_uri,
@@ -284,13 +307,62 @@ export async function addEvidence(id, input = {}) {
 
 export async function addEvidenceBatch(id, input = {}) {
   const items = Array.isArray(input.items) ? input.items : Array.isArray(input.evidence) ? input.evidence : [];
+  const processingMode = normalizeProcessingMode(input.processingMode || input.processing_mode);
+  const shouldQueue = processingMode === 'async';
   const created = [];
   for (const item of items) {
-    const evidence = await addEvidence(id, item);
+    const evidence = await addEvidence(id, {
+      ...item,
+      analysisStatus: shouldQueue ? 'queued' : item.analysisStatus,
+      analysis_status: shouldQueue ? 'queued' : item.analysis_status
+    });
     if (!evidence) return null;
     created.push(evidence);
   }
-  return { tradeCaseId: id, items: created };
+
+  const queuedJobs = [];
+  if (shouldQueue) {
+    for (const [index, evidence] of created.entries()) {
+      const sourceItem = items[index] || {};
+      const job = await queueEvidenceAnalysisJob(id, evidence.id, {
+        jobType: sourceItem.jobType || input.jobType || DEFAULT_ANALYSIS_JOB_TYPE,
+        priority: sourceItem.priority ?? input.priority ?? defaultEvidencePriority(evidence),
+        maxAttempts: sourceItem.maxAttempts ?? input.maxAttempts,
+        payload: buildAnalysisJobPayload({ input, item: sourceItem, evidence })
+      });
+      queuedJobs.push(job);
+    }
+  }
+
+  const processingSummary = await getProcessingSummary(id);
+  const guidance = shouldQueue ? await generateGuidance(id) : null;
+  const caseNumber = formatCaseNumber(id);
+  const queuedSlots = new Set(created.map(evidence => evidence.checklistSlot).filter(Boolean));
+  const nextEvidenceRequests = filterRequestsForQueuedSlots(guidance?.nextEvidenceRequests || [], queuedSlots);
+  const acknowledgementChecklist = filterChecklistForQueuedSlots(guidance?.checklist || {}, queuedSlots);
+  const activeQueuedCount = queuedJobs.filter(job => job.status !== 'succeeded').length;
+  const message = shouldQueue
+    ? buildProcessingAcknowledgementMessage({
+        caseNumber,
+        registeredCount: created.length,
+        queuedCount: activeQueuedCount,
+        nextEvidenceRequests,
+        checklist: acknowledgementChecklist,
+        unitType: acknowledgementChecklist.unitType
+      })
+    : undefined;
+
+  return {
+    tradeCaseId: id,
+    caseNumber,
+    items: created,
+    registeredCount: created.length,
+    queuedCount: activeQueuedCount,
+    jobs: queuedJobs,
+    processingSummary,
+    nextEvidenceRequests,
+    message
+  };
 }
 
 export async function updateEvidence(tradeCaseId, evidenceId, input = {}) {
@@ -382,6 +454,10 @@ async function persistRoutingDecision(id, routing) {
 }
 
 export async function analyzeEvidence(tradeCaseId, evidenceId, input = {}) {
+  if (shouldAnalyzeAsync(input)) {
+    return queueEvidenceAnalysis(tradeCaseId, evidenceId, input);
+  }
+
   return withTransaction(async client => {
     const tradeCaseResult = await client.query(
       `SELECT tc.*, row_to_json(m.*) AS machine
@@ -488,6 +564,223 @@ export async function analyzeEvidence(tradeCaseId, evidenceId, input = {}) {
       mode: inference.mode
     };
   });
+}
+
+export async function queueEvidenceAnalysis(tradeCaseId, evidenceId, input = {}) {
+  const tradeCase = await getTradeCase(tradeCaseId);
+  if (!tradeCase) return null;
+  const evidence = (tradeCase.evidenceItems || []).find(item => item.id === evidenceId);
+  if (!evidence) return null;
+
+  await updateEvidence(tradeCaseId, evidenceId, { analysisStatus: 'queued' });
+  const job = await queueEvidenceAnalysisJob(tradeCaseId, evidenceId, {
+    jobType: input.jobType || input.job_type || DEFAULT_ANALYSIS_JOB_TYPE,
+    priority: input.priority ?? defaultEvidencePriority(evidence),
+    maxAttempts: input.maxAttempts ?? input.max_attempts,
+    payload: stripAsyncFlags({
+      ...input,
+      analysisMode: input.analysisMode || input.analysis_mode || DEFAULT_ANALYSIS_JOB_TYPE,
+      checklistSlot: input.checklistSlot || input.checklist_slot || evidence.checklistSlot
+    })
+  });
+
+  return {
+    tradeCaseId,
+    caseNumber: tradeCase.caseNumber,
+    evidenceId,
+    jobId: job.id,
+    analysisStatus: job.status === 'succeeded' ? 'complete' : 'queued',
+    job,
+    processingSummary: await getProcessingSummary(tradeCaseId)
+  };
+}
+
+export async function queueEvidenceAnalysisJob(tradeCaseId, evidenceId, input = {}) {
+  const jobType = input.jobType || input.job_type || DEFAULT_ANALYSIS_JOB_TYPE;
+  const result = await query(
+    `INSERT INTO evidence_analysis_jobs (
+      trade_case_id, evidence_item_id, job_type, status, priority, max_attempts, payload_json
+    )
+    VALUES ($1,$2,$3,'queued',$4,$5,$6)
+    ON CONFLICT (evidence_item_id, job_type) WHERE status <> 'cancelled'
+    DO UPDATE SET
+      status = CASE
+        WHEN evidence_analysis_jobs.status IN ('processing', 'succeeded') THEN evidence_analysis_jobs.status
+        ELSE 'queued'
+      END,
+      priority = LEAST(evidence_analysis_jobs.priority, EXCLUDED.priority),
+      max_attempts = GREATEST(evidence_analysis_jobs.max_attempts, EXCLUDED.max_attempts),
+      payload_json = EXCLUDED.payload_json,
+      error = CASE
+        WHEN evidence_analysis_jobs.status IN ('processing', 'succeeded') THEN evidence_analysis_jobs.error
+        ELSE NULL
+      END,
+      next_attempt_at = CASE
+        WHEN evidence_analysis_jobs.status IN ('processing', 'succeeded') THEN evidence_analysis_jobs.next_attempt_at
+        ELSE NOW()
+      END,
+      updated_at = NOW()
+    RETURNING *`,
+    [
+      tradeCaseId,
+      evidenceId,
+      jobType,
+      input.priority ?? 100,
+      input.maxAttempts ?? input.max_attempts ?? 3,
+      input.payload || {}
+    ]
+  );
+  return rowToAnalysisJob(result.rows[0]);
+}
+
+export async function claimAnalysisJobs({ limit = 4, workerId = `worker-${process.pid}`, timeoutMs = 300000 } = {}) {
+  const claimLimit = Math.max(1, Number(limit) || 1);
+  return withTransaction(async client => {
+    const result = await client.query(
+      `WITH selected AS (
+        SELECT id
+        FROM evidence_analysis_jobs
+        WHERE status = ANY($1::text[])
+          AND next_attempt_at <= NOW()
+        ORDER BY priority ASC, created_at ASC
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE evidence_analysis_jobs jobs
+      SET status = 'processing',
+          attempts = jobs.attempts + 1,
+          locked_by = $3,
+          locked_at = NOW(),
+          started_at = COALESCE(jobs.started_at, NOW()),
+          timeout_at = NOW() + ($4::text)::interval,
+          updated_at = NOW()
+      FROM selected
+      WHERE jobs.id = selected.id
+      RETURNING jobs.*`,
+      [READY_JOB_STATUSES, claimLimit, workerId, `${Math.max(1000, timeoutMs)} milliseconds`]
+    );
+
+    const evidenceIds = result.rows.map(row => row.evidence_item_id);
+    if (evidenceIds.length) {
+      await client.query(
+        `UPDATE evidence_items
+         SET analysis_status = 'processing'
+         WHERE id = ANY($1::uuid[])
+           AND analysis_status NOT IN ('complete', 'unsupported')`,
+        [evidenceIds]
+      );
+    }
+
+    return result.rows.map(rowToAnalysisJob);
+  });
+}
+
+export async function processEvidenceAnalysisJob(job) {
+  const payload = stripAsyncFlags({
+    ...(job.payload || {}),
+    analysisMode: job.payload?.analysisMode || job.payload?.analysis_mode || job.jobType || DEFAULT_ANALYSIS_JOB_TYPE
+  });
+  return analyzeEvidence(job.tradeCaseId, job.evidenceItemId, payload);
+}
+
+export async function completeAnalysisJob(jobId, result = {}) {
+  const update = await query(
+    `UPDATE evidence_analysis_jobs
+     SET status = 'succeeded',
+         result_json = $2,
+         error = NULL,
+         locked_by = NULL,
+         locked_at = NULL,
+         completed_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [jobId, result]
+  );
+  return update.rows[0] ? rowToAnalysisJob(update.rows[0]) : null;
+}
+
+export async function failAnalysisJob(job, error) {
+  const message = error?.message || String(error);
+  const terminal = Number(job.attempts || 0) >= Number(job.maxAttempts || 3);
+  const backoffSeconds = Math.min(300, Math.pow(2, Math.max(0, Number(job.attempts || 1) - 1)) * 15);
+  const update = await query(
+    `UPDATE evidence_analysis_jobs
+     SET status = $2,
+         error = $3,
+         locked_by = NULL,
+         locked_at = NULL,
+         completed_at = CASE WHEN $2 = 'failed_terminal' THEN NOW() ELSE completed_at END,
+         next_attempt_at = CASE WHEN $2 = 'failed_retryable' THEN NOW() + ($4::text)::interval ELSE next_attempt_at END,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [
+      job.id,
+      terminal ? 'failed_terminal' : 'failed_retryable',
+      message,
+      `${backoffSeconds} seconds`
+    ]
+  );
+
+  await query(
+    `UPDATE evidence_items
+     SET analysis_status = $2,
+         metadata_json = metadata_json || $3::jsonb
+     WHERE trade_case_id = $1 AND id = $4`,
+    [
+      job.tradeCaseId,
+      terminal ? 'failed' : 'queued',
+      { analysisError: { message, terminal, jobId: job.id } },
+      job.evidenceItemId
+    ]
+  );
+
+  return update.rows[0] ? rowToAnalysisJob(update.rows[0]) : null;
+}
+
+export async function getProcessingStatus(id) {
+  const tradeCase = await getTradeCase(id);
+  if (!tradeCase) return null;
+  const jobs = await listAnalysisJobs(id);
+  const summary = buildProcessingSummary(tradeCase.evidenceItems || [], jobs);
+  const latestGuidance = await generateGuidance(id);
+  const jobsByEvidence = latestJobByEvidence(jobs);
+
+  return {
+    tradeCaseId: id,
+    caseNumber: tradeCase.caseNumber,
+    generatedAt: new Date().toISOString(),
+    summary,
+    evidence: (tradeCase.evidenceItems || []).map(evidence => ({
+      ...evidence,
+      job: jobsByEvidence.get(evidence.id) || null
+    })),
+    latestGuidance,
+    message: buildProcessingStatusMessage({ caseNumber: tradeCase.caseNumber, summary, latestGuidance })
+  };
+}
+
+export async function getProcessingSummary(id) {
+  const tradeCase = await getTradeCase(id);
+  if (!tradeCase) return emptyProcessingSummary();
+  return buildProcessingSummary(tradeCase.evidenceItems || [], await listAnalysisJobs(id));
+}
+
+export function buildProcessingSummary(evidenceItems = [], jobs = []) {
+  const jobsByEvidence = latestJobByEvidence(jobs);
+  const summary = emptyProcessingSummary();
+  summary.registered = evidenceItems.length;
+
+  for (const evidence of evidenceItems) {
+    const job = jobsByEvidence.get(evidence.id);
+    const status = rollupEvidenceProcessingStatus(evidence, job);
+    summary[status] += 1;
+  }
+
+  summary.incomplete = summary.pending + summary.queued + summary.processing;
+  summary.done = summary.complete + summary.failed + summary.unsupported;
+  return summary;
 }
 
 export async function getChecklistStatus(id) {
@@ -642,6 +935,33 @@ export async function generatePacket(id) {
       nextStep
     }
   };
+
+  if (isDemoValuationEnabled()) {
+    const demoValuation = await generateDemoValuation({ tradeCase, checklist, findings, routing });
+    if (demoValuation) {
+      packet.demoValuation = demoValuation;
+      packet.recommendation = {
+        ...packet.recommendation,
+        preliminaryTradeValue: demoValuation.valuation?.estimatedTradeValueRange || null,
+        demoReconBudget: demoValuation.reconBudget?.estimatedRange || null,
+        reason: `${demoValuation.disclaimer} Reviewer should still validate against internal sales history, competitive listings, JDDO/Dynamics context, and approved recon pricing.`
+      };
+      await recordIntegrationJob(id, {
+        jobType: 'demo_valuation_recon',
+        targetSystem: 'trade_in_phase_five_demo',
+        status: demoValuationSucceeded(demoValuation) ? 'completed' : 'failed',
+        payload: {
+          caseNumber: tradeCase.caseNumber,
+          machine: tradeCase.machine,
+          route: routing.route,
+          confidence: routing.confidence,
+          promptVersion: demoValuation.promptVersion
+        },
+        result: demoValuation,
+        error: demoValuation.fallbackReason || demoValuation.error || null
+      });
+    }
+  }
   packet.reviewerBrief = buildReviewerBrief(packet);
 
   const result = await query(
@@ -722,6 +1042,30 @@ function rowToFinding(row = {}) {
   };
 }
 
+function rowToAnalysisJob(row = {}) {
+  return {
+    id: row.id,
+    tradeCaseId: row.trade_case_id,
+    evidenceItemId: row.evidence_item_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    jobType: row.job_type,
+    status: row.status,
+    priority: row.priority,
+    attempts: row.attempts,
+    maxAttempts: row.max_attempts,
+    lockedBy: row.locked_by,
+    lockedAt: row.locked_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    nextAttemptAt: row.next_attempt_at,
+    timeoutAt: row.timeout_at,
+    payload: row.payload_json || {},
+    result: row.result_json || {},
+    error: row.error
+  };
+}
+
 function findingsFromChecklist(checklist = {}) {
   return [
     ...(checklist.visibleConditionFindings || []),
@@ -734,6 +1078,139 @@ function numberOrNull(value) {
   if (value == null) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeProcessingMode(value) {
+  return String(value || '').toLowerCase() === 'async' ? 'async' : 'sync';
+}
+
+function shouldAnalyzeAsync(input = {}) {
+  return input.async === true ||
+    input.queue === true ||
+    normalizeProcessingMode(input.processingMode || input.processing_mode) === 'async';
+}
+
+function stripAsyncFlags(input = {}) {
+  const {
+    async: _async,
+    queue: _queue,
+    processingMode: _processingMode,
+    processing_mode: _processing_mode,
+    ...rest
+  } = input;
+  return rest;
+}
+
+function buildAnalysisJobPayload({ input = {}, item = {}, evidence = {} } = {}) {
+  return stripAsyncFlags({
+    analysisMode: item.analysisMode || item.analysis_mode || input.analysisMode || input.analysis_mode || DEFAULT_ANALYSIS_JOB_TYPE,
+    checklistSlot: item.checklistSlot || item.checklist_slot || evidence.checklistSlot,
+    sampledFrames: item.sampledFrames || item.sampled_frames || [],
+    media: item.media || input.media || undefined,
+    machineContext: item.machineContext || input.machineContext || undefined,
+    sourceMessageId: evidence.sourceMessageId,
+    sourceAttachmentId: evidence.sourceAttachmentId
+  });
+}
+
+function filterRequestsForQueuedSlots(requests = [], queuedSlots = new Set()) {
+  return requests.filter(request => !queuedSlots.has(request.slot));
+}
+
+function filterChecklistForQueuedSlots(checklist = {}, queuedSlots = new Set()) {
+  return {
+    ...checklist,
+    nextRecommendedSlots: (checklist.nextRecommendedSlots || []).filter(slot => !queuedSlots.has(slot)),
+    missingSlots: (checklist.missingSlots || []).filter(slot => !queuedSlots.has(slot))
+  };
+}
+
+function defaultEvidencePriority(evidence = {}) {
+  const slot = evidence.checklistSlot;
+  if (['serial_plate', 'cab_display_hours', 'startup_video'].includes(slot)) return 10;
+  if (['feeder_house', 'engine_compartment'].includes(slot)) return 25;
+  if (String(evidence.notes || '').toLowerCase().includes('damage')) return 20;
+  return 100;
+}
+
+async function listAnalysisJobs(tradeCaseId) {
+  const result = await query(
+    `SELECT * FROM evidence_analysis_jobs
+     WHERE trade_case_id = $1
+     ORDER BY created_at ASC, id ASC`,
+    [tradeCaseId]
+  );
+  return result.rows.map(rowToAnalysisJob);
+}
+
+async function summarizeAnalysisQueue() {
+  const result = await query(
+    `SELECT status, COUNT(*)::int AS count
+     FROM evidence_analysis_jobs
+     GROUP BY status`
+  );
+  const summary = {};
+  for (const row of result.rows) summary[row.status] = row.count;
+  return {
+    available: true,
+    queued: summary.queued || 0,
+    processing: summary.processing || 0,
+    failedRetryable: summary.failed_retryable || 0,
+    failedTerminal: summary.failed_terminal || 0,
+    succeeded: summary.succeeded || 0,
+    cancelled: summary.cancelled || 0
+  };
+}
+
+function latestJobByEvidence(jobs = []) {
+  const map = new Map();
+  for (const job of jobs) {
+    const current = map.get(job.evidenceItemId);
+    if (!current || new Date(job.createdAt || 0) >= new Date(current.createdAt || 0)) {
+      map.set(job.evidenceItemId, job);
+    }
+  }
+  return map;
+}
+
+function emptyProcessingSummary() {
+  return {
+    registered: 0,
+    pending: 0,
+    queued: 0,
+    processing: 0,
+    complete: 0,
+    failed: 0,
+    unsupported: 0,
+    incomplete: 0,
+    done: 0
+  };
+}
+
+function rollupEvidenceProcessingStatus(evidence = {}, job = null) {
+  const evidenceStatus = evidence.analysisStatus || evidence.analysis_status || 'pending';
+  if (evidenceStatus === 'complete') return 'complete';
+  if (evidenceStatus === 'unsupported') return 'unsupported';
+  if (evidenceStatus === 'failed') return 'failed';
+  if (job?.status === 'succeeded') return 'complete';
+  if (job?.status === 'processing') return 'processing';
+  if (job?.status === 'failed_terminal') return 'failed';
+  if (['queued', 'failed_retryable'].includes(job?.status)) return 'queued';
+  if (evidenceStatus === 'processing') return 'processing';
+  if (evidenceStatus === 'queued') return 'queued';
+  return 'pending';
+}
+
+function buildProcessingStatusMessage({ caseNumber, summary, latestGuidance } = {}) {
+  const lines = [];
+  if (caseNumber) lines.push(`Trade case ${caseNumber} is processing.`);
+  lines.push(`Complete: ${summary.complete}. Processing: ${summary.processing}. Queued: ${summary.queued}. Failed: ${summary.failed}.`);
+  if (summary.incomplete > 0) {
+    lines.push('You can keep sending photos or video while I work through the queue.');
+  }
+  const next = latestGuidance?.nextEvidenceRequests?.[0]?.description;
+  if (next) lines.push(`Next: please send ${next}.`);
+  return lines.join('\n');
 }
 
 async function insertFinding(client, tradeCaseId, evidenceId, finding) {
@@ -755,4 +1232,34 @@ async function insertFinding(client, tradeCaseId, evidenceId, finding) {
       finding.recommendation || null
     ]
   );
+}
+
+async function recordIntegrationJob(tradeCaseId, { jobType, targetSystem, status, payload, result, error }) {
+  try {
+    await query(
+      `INSERT INTO integration_jobs (
+        trade_case_id, job_type, target_system, status, payload_json, result_json, error
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [
+        tradeCaseId,
+        jobType,
+        targetSystem,
+        status || 'pending',
+        payload || {},
+        result || {},
+        error || null
+      ]
+    );
+  } catch (insertError) {
+    console.warn(`Could not record integration job ${jobType}: ${insertError.message}`);
+  }
+}
+
+export function demoValuationSucceeded(demoValuation = {}) {
+  if (demoValuation.error) return false;
+  if (demoValuation.fallbackReason && !demoValuation.valuation?.estimatedTradeValueRange) return false;
+  return String(demoValuation.status || '').startsWith('generated') ||
+    demoValuation.status === 'fallback_generated' ||
+    Boolean(demoValuation.valuation?.estimatedTradeValueRange);
 }

@@ -1,4 +1,4 @@
-# Milestone Two: Teams Evidence Loop
+# Milestone 2: Teams Evidence Loop
 
 ## Goal
 
@@ -26,7 +26,7 @@ The first useful Phase Two slice is:
 
 This is not yet the final valuation engine. It is the field evidence and visual inference loop that makes later valuation, reconditioning, review, and downstream integration credible.
 
-## Milestone Two Deliverables
+## Milestone 2 Deliverables
 
 1. Agent-facing tool contract for case creation, evidence registration, checklist review, and packet generation.
 2. Conversation flow spec for starting and continuing a trade case from Teams.
@@ -42,9 +42,9 @@ This is not yet the final valuation engine. It is the field evidence and visual 
 
 ## Phase Two Coverage Map
 
-Milestone Two intentionally covers every step from the Phase 2 Teams Evidence Loop section of the implementation plan.
+Milestone 2 intentionally covers every step from the Phase 2 Teams Evidence Loop section of the implementation plan.
 
-| Phase 2 step | Milestone Two coverage |
+| Phase 2 step | Milestone 2 coverage |
 |---|---|
 | Let agent create trade cases from Teams | Add an agent tool contract and prompt instructions for creating a case from conversation state. |
 | Register uploaded media against a case | Extend evidence registration to include Teams/OpenClaw attachment metadata and checklist slot hints. |
@@ -54,7 +54,7 @@ Milestone Two intentionally covers every step from the Phase 2 Teams Evidence Lo
 
 ## Non-Goals
 
-Milestone Two should not try to solve:
+Milestone 2 should not try to solve:
 
 - final trade value calculation
 - automated reconditioning dollar estimates
@@ -138,7 +138,7 @@ http://127.0.0.1:8788
 
 ### Required Endpoints
 
-Milestone One already provides the baseline endpoints:
+Milestone 1 already provides the baseline endpoints:
 
 - `POST /trade-cases`
 - `GET /trade-cases/:id`
@@ -147,7 +147,7 @@ Milestone One already provides the baseline endpoints:
 - `GET /trade-cases/:id/checklist`
 - `POST /trade-cases/:id/packet`
 
-Milestone Two should add or refine:
+Milestone 2 should add or refine:
 
 - `GET /trade-cases/active?sourceConversationId=...`
 - `POST /trade-cases/:id/evidence/batch`
@@ -256,7 +256,7 @@ The inference prompt should ask the model to separate:
 - uncertainty: what cannot be determined from the media
 - field guidance: what the rep should capture next while still near the machine
 
-For videos, Milestone Two should sample frames first and send representative frames to the OpenAI API. Full video understanding can come later if needed.
+For videos, Milestone 2 should sample frames first and send representative frames to the OpenAI API. Full video understanding can come later if needed.
 
 ### Checklist Response Requirements
 
@@ -291,7 +291,7 @@ The guidance response should expose:
 
 ## Evidence State Model
 
-Milestone Two should support these evidence states:
+Milestone 2 should support these evidence states:
 
 - `accepted`: usable for the packet
 - `weak`: partially useful, may need follow-up
@@ -380,7 +380,7 @@ Expected:
 multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent && ./scripts/smoke-test.sh'
 ```
 
-Milestone Two should add a second smoke path that exercises:
+Milestone 2 should add a second smoke path that exercises:
 
 - create case with `sourceConversationId`
 - batch evidence registration
@@ -390,7 +390,7 @@ Milestone Two should add a second smoke path that exercises:
 
 ## Acceptance Criteria
 
-Milestone Two is complete when:
+Milestone 2 is complete when:
 
 - a local OpenClaw agent can create a case through the sidecar from a Teams-style prompt
 - evidence can be registered with Teams/OpenClaw attachment metadata
@@ -420,7 +420,7 @@ Milestone Two is complete when:
 
 ## Risks And Design Notes
 
-- Teams file URLs may require Graph access or token-aware download later. For Milestone Two, store durable metadata and placeholder storage URIs rather than blocking on final media sync.
+- Teams file URLs may require Graph access or token-aware download later. For Milestone 2, store durable metadata and placeholder storage URIs rather than blocking on final media sync.
 - The agent may be tempted to infer too much from filenames, user descriptions, or visual model output. Prompt rules should require uncertainty to be stated clearly.
 - Visual inference can identify visible condition concerns, but it cannot replace mechanical inspection. The packet should keep visible findings separate from technician-level conclusions.
 - OpenAI API calls need a fixture-backed test path so local tests do not depend on live API availability.

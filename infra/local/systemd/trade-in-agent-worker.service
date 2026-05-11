@@ -1,0 +1,19 @@
+[Unit]
+Description=Trade-In Agent Evidence Analysis Worker
+After=network-online.target postgresql.service trade-in-agent-sidecar.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/openclaw-workspace/trade-in-agent/app
+EnvironmentFile=/home/openclaw/openclaw-workspace/trade-in-agent/.env
+Environment=TRADE_IN_WORKER_MODE=separate
+Environment=TRADE_IN_ANALYSIS_CONCURRENCY=4
+Environment=TRADE_IN_ANALYSIS_PER_CASE_CONCURRENCY=2
+ExecStart=/usr/bin/node src/worker.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

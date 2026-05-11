@@ -62,9 +62,32 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 UNIT
+sudo tee /etc/systemd/system/trade-in-agent-worker.service >/dev/null <<'UNIT'
+[Unit]
+Description=Trade-In Agent Evidence Analysis Worker
+After=network-online.target postgresql.service trade-in-agent-sidecar.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/trade-in-agent/app
+EnvironmentFile=/home/ubuntu/trade-in-agent/.env
+Environment=TRADE_IN_WORKER_MODE=separate
+Environment=TRADE_IN_ANALYSIS_CONCURRENCY=4
+Environment=TRADE_IN_ANALYSIS_PER_CASE_CONCURRENCY=2
+ExecStart=/usr/bin/node src/worker.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
 sudo systemctl daemon-reload
 sudo systemctl enable trade-in-agent-sidecar.service
+sudo systemctl enable trade-in-agent-worker.service
 sudo systemctl restart trade-in-agent-sidecar.service
+sudo systemctl restart trade-in-agent-worker.service
 ready=0
 for i in {1..20}; do
   if curl -fsS http://127.0.0.1:8788/health >/dev/null 2>&1; then
@@ -77,8 +100,13 @@ if [[ "\$ready" != "1" ]]; then
   sudo systemctl --no-pager --full status trade-in-agent-sidecar.service
   exit 1
 fi
+sudo systemctl is-active --quiet trade-in-agent-worker.service || {
+  sudo systemctl --no-pager --full status trade-in-agent-worker.service
+  exit 1
+}
 "
 
 echo "Multipass bootstrap complete for $VM_NAME."
 echo "Sidecar service: trade-in-agent-sidecar.service"
+echo "Worker service: trade-in-agent-worker.service"
 echo "Run smoke test: multipass exec $VM_NAME -- bash -lc 'cd $REMOTE_DIR && ./scripts/smoke-test.sh'"

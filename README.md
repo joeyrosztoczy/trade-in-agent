@@ -64,10 +64,13 @@ Supporting docs:
 
 - [docs/implementation-plan.md](docs/implementation-plan.md) describes the north star and MVP build sequence.
 - [docs/manual-qa.md](docs/manual-qa.md) gives manual QA steps for the current sidecar.
-- [docs/milestone-one-local-dev-bootstrap.md](docs/milestone-one-local-dev-bootstrap.md) specifies the local development bootstrap plan.
-- [docs/milestone-two-teams-evidence-loop.md](docs/milestone-two-teams-evidence-loop.md) specifies the Teams evidence loop milestone.
-- [docs/milestone-two-live-teams-attachment-bridge.md](docs/milestone-two-live-teams-attachment-bridge.md) specifies the live Teams attachment bridge milestone.
-- [docs/milestone-three-analysis-routing.md](docs/milestone-three-analysis-routing.md) specifies the evidence-to-route decision layer.
+- M1: [docs/milestone-one-local-dev-bootstrap.md](docs/milestone-one-local-dev-bootstrap.md) specifies the local development bootstrap plan.
+- M2: [docs/milestone-two-teams-evidence-loop.md](docs/milestone-two-teams-evidence-loop.md) specifies the Teams evidence loop milestone.
+- M2.5: [docs/milestone-two-live-teams-attachment-bridge.md](docs/milestone-two-live-teams-attachment-bridge.md) specifies the live Teams attachment bridge milestone.
+- M3: [docs/milestone-three-analysis-routing.md](docs/milestone-three-analysis-routing.md) specifies the evidence-to-route decision layer.
+- M3.5: [docs/milestone-boundary-hardening.md](docs/milestone-boundary-hardening.md) specifies the API contract and OpenClaw boundary-hardening milestone.
+- M4: [docs/milestone-demo-valuation-recon.md](docs/milestone-demo-valuation-recon.md) specifies the feature-flagged demo valuation and reconditioning estimate adapter.
+- M5: [docs/milestone-async-evidence-processing.md](docs/milestone-async-evidence-processing.md) specifies the async evidence processing and field acknowledgement milestone.
 - [docs/qa/initial-user-qa-summary.md](docs/qa/initial-user-qa-summary.md) summarizes the first realistic sales-rep and used-team QA run.
 - [docs/qa/realistic-combine-media-sources.md](docs/qa/realistic-combine-media-sources.md) lists the public combine photo/video sources used by the QA runner.
 - [docs/qa/stotz-sales-live-replay-2026-05-06.md](docs/qa/stotz-sales-live-replay-2026-05-06.md) records the Stotz Sales VM deployment and Teams replay path.

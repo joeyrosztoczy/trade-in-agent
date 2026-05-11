@@ -29,8 +29,19 @@ The production-like Stotz Teams test target is:
 - Agent project instructions: `/home/openclaw/openclaw-workspace/PROJECT.md`
 - Sidecar systemd unit: `/etc/systemd/system/trade-in-agent-sidecar.service`
 - Sidecar database: Postgres database `trade_in_agent_prod`
+- OpenClaw desired runtime config: `/home/openclaw/openclaw-workspace/.openclaw/runtime-config.json`
+- OpenClaw actual runtime config: `/home/openclaw/.openclaw/openclaw.json`
 
 The sidecar should use the same Stotz corporate sales OpenAI key as OpenClaw. On the VM, source it from OpenClaw's existing environment file and write only the `OPENAI_API_KEY=...` assignment into the sidecar `.env`. Never print the key in logs or documentation.
+
+Live demo packet generation uses GPT-5.5/public web research and can take longer than 60 seconds. The Trade-In Agent plugin timeout must be `240000` in both:
+
+```text
+/home/openclaw/openclaw-workspace/.openclaw/runtime-config.json -> pluginConfigs.trade-in-agent.config.timeoutMs
+/home/openclaw/.openclaw/openclaw.json -> plugins.entries.trade-in-agent.config.timeoutMs
+```
+
+If the first-class `trade_in_generate_packet` tool reports `timed out after 60000ms`, the desired workspace config may have been updated without applying the actual OpenClaw config. Patch/apply the actual config and restart `openclaw-gateway`.
 
 ## Deployment Steps
 
@@ -103,6 +114,13 @@ OPENAI_API_KEY=$OPENAI_KEY
 OPENAI_VISION_MODE=live
 OPENAI_VISION_MODEL=gpt-5.4-mini
 OPENAI_VISION_REVIEW_MODEL=gpt-5.4
+DEMO_VALUATION_ENABLED=true
+DEMO_VALUATION_MODE=live
+DEMO_VALUATION_MODEL=gpt-5.5
+DEMO_VALUATION_WEB_SEARCH=true
+DEMO_VALUATION_WEB_SEARCH_REQUIRED=true
+DEMO_VALUATION_SEARCH_CONTEXT_SIZE=medium
+DEMO_VALUATION_EXTERNAL_WEB_ACCESS=true
 ENV
 chown openclaw:openclaw "$APP_ROOT/.env"
 chmod 600 "$APP_ROOT/.env"
@@ -153,7 +171,7 @@ Route trigger guidance:
 
 For Teams users, keep replies field-focused: accepted evidence, retakes, missing evidence, current route, confidence, visible condition notes, and next best photo/video request. Treat visual findings as visible observations, not a replacement for a licensed mechanical inspection.
 
-Current limit: numeric trade values and numeric reconditioning budgets are not automated yet. The workflow can produce evidence completeness, visible condition findings, limitations, fast/standard/escalation routing, human review status, risk flags, draft recon scenario structure, and reviewer handoff packets.
+Demo valuation limit: when demo valuation is enabled, the packet may include a GPT-5.5/public-web-researched demo trade value range and demo reconditioning budget. These are controlled QA estimates, not approved offers, confirmed sale prices, or final shop estimates. The workflow still requires used-team review, internal sales history/business-system context, and technician escalation when the route requires it.
 
 {end}
 """
@@ -250,6 +268,44 @@ ssh -F "$SSH_CONFIG" "$SSH_HOST" \
   'sudo journalctl -u openclaw-gateway -n 200 --no-pager'
 ```
 
+Confirm the packet tool timeout is applied:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'sudo -u openclaw jq -r ".plugins.entries[\"trade-in-agent\"].config.timeoutMs" /home/openclaw/.openclaw/openclaw.json'
+```
+
+Expected:
+
+```text
+240000
+```
+
+## Live Teams QA Replay
+
+From the Stotz Sales Agent Teams chat, use a QA/demo prompt like:
+
+```text
+Please start a NEW trade-in evaluation case for a 2021 John Deere S770 combine, about 1,320 engine hours and 910 separator hours, duals, 40 ft draper included, known issue: feeder house chain looks worn, no photos yet. Route this through the trade-in sidecar before answering. Please reply with the case number/id, current evidence status, the next 3 photos or videos needed, and generate a demo valuation/recon packet using public comps/web research if the workflow supports it. Mark it QA/demo only, not an approved offer.
+```
+
+Expected behavior:
+
+- The agent creates or resumes a durable sidecar case and shows both case number and UUID.
+- The agent asks for the next evidence slots from sidecar guidance, not chat memory.
+- The first-class `trade_in_generate_packet` tool completes without a 60-second timeout.
+- The reply is explicitly QA/demo only and includes field status, next evidence requests, demo trade value range, and demo recon range.
+
+2026-05-08 production QA passed from the Stotz corporate sales Teams interface:
+
+- Case: `TIA-914FA7B7`
+- Case ID: `914fa7b7-b887-4ede-b93f-1a7afc7ffcc8`
+- First-class packet ID: `e68bf32a-663e-4e18-aa7b-c7e1d8de92a1`
+- Tool path: `trade_in_generate_packet`
+- Tool duration: about 87 seconds, with `240000ms` timeout applied
+- Demo trade value range: `$205,000-$275,000`
+- Demo recon range: `$45,000-$95,000`
+
 ## Live Teams Attachment Bridge QA
 
 Use [docs/milestone-two-live-teams-attachment-bridge.md](milestone-two-live-teams-attachment-bridge.md) for the Milestone 2.5 implementation spec.
@@ -318,8 +374,21 @@ Expected behavior:
 
 - The agent creates or finds an active trade case for the Teams conversation.
 - The agent registers available media metadata with the sidecar.
-- The sidecar sends accessible image evidence to the OpenAI API for inference.
-- The agent replies with accepted evidence, retakes, missing evidence, visible notes, and the next best field ask.
+- The sidecar queues accessible image evidence for background OpenAI inference.
+- The agent replies quickly with the case number, registered count, processing acknowledgement, and the next best field ask.
+- A follow-up status request reports accepted evidence, retakes, missing evidence, visible notes, queued/processing/complete counts, and the next best field ask.
+
+Useful follow-up while processing:
+
+```text
+What do you have so far, and are the photos done processing?
+```
+
+Expected:
+
+- The agent calls `GET /trade-cases/:id/processing-status`.
+- The reply includes the case number.
+- The reply distinguishes queued, processing, complete, failed, and still-needed evidence.
 
 Useful reviewer handoff prompt:
 
@@ -353,11 +422,32 @@ ssh -F "$SSH_CONFIG" "$SSH_HOST" \
   'sudo systemctl restart trade-in-agent-sidecar.service'
 ```
 
+Restart only the async evidence worker:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'sudo systemctl restart trade-in-agent-worker.service'
+```
+
+Check queue health:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'curl -fsS http://127.0.0.1:8788/health'
+```
+
+Worker logs:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" \
+  'sudo journalctl -u trade-in-agent-worker.service --since "30 minutes ago" --no-pager'
+```
+
 Disable the sidecar without touching OpenClaw:
 
 ```bash
 ssh -F "$SSH_CONFIG" "$SSH_HOST" \
-  'sudo systemctl disable --now trade-in-agent-sidecar.service'
+  'sudo systemctl disable --now trade-in-agent-sidecar.service trade-in-agent-worker.service'
 ```
 
 Remove the agent instruction block from `/home/openclaw/openclaw-workspace/PROJECT.md` by deleting the section between:

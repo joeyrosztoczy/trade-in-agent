@@ -226,6 +226,75 @@ Use the review model by passing `analysisMode: "high_risk"`, `analysisMode: "rev
 
 Do not commit real API keys. The default `OPENAI_VISION_MODE=fixture` path is the repeatable local QA path when deployment secrets are unavailable.
 
+## Milestone 5 Async Evidence QA
+
+This verifies that Teams-style batch uploads can be acknowledged immediately while image analysis runs in the background.
+
+Validate services:
+
+```bash
+multipass exec trade-in-agent-dev -- sudo systemctl is-active trade-in-agent-sidecar.service
+multipass exec trade-in-agent-dev -- sudo systemctl is-active trade-in-agent-worker.service
+```
+
+Run the async smoke path:
+
+```bash
+multipass exec trade-in-agent-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && npm run smoke:async'
+```
+
+Expected:
+
+- output includes `ok: true`
+- acknowledgement includes the case number and says processing started in the background
+- `processingSummary.complete` reaches the queued item count
+- guidance still includes the case number and next field ask
+
+Check queue health:
+
+```bash
+multipass exec trade-in-agent-dev -- curl -fsS http://127.0.0.1:8788/health
+```
+
+Expected:
+
+- `analysisQueue.available` is `true`
+- queued/processing/failed counts are visible
+
+Manual endpoint path:
+
+```bash
+curl -fsS "http://127.0.0.1:8788/trade-cases/$CASE_ID/evidence/batch" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "processingMode": "async",
+    "items": [
+      {
+        "uploadedBy": "manual-qa",
+        "mediaType": "photo",
+        "storageUri": "https://photos.machinefinder.com/96/11033496/73087499_large_48294.jpg",
+        "contentType": "image/jpeg",
+        "checklistSlot": "front_45",
+        "sourceMessageId": "manual-qa-message",
+        "sourceAttachmentId": "manual-qa-front-45"
+      }
+    ]
+  }'
+```
+
+Then poll:
+
+```bash
+curl -fsS "http://127.0.0.1:8788/trade-cases/$CASE_ID/processing-status"
+```
+
+Worker diagnostics:
+
+```bash
+multipass exec trade-in-agent-dev -- sudo journalctl -u trade-in-agent-worker.service --since '30 minutes ago' --no-pager
+multipass exec trade-in-agent-dev -- sudo systemctl restart trade-in-agent-worker.service
+```
+
 ## Realistic Sales-Rep User Flow QA
 
 The realistic user-flow runner simulates a sales rep uploading a partial combine walkaround and then a fuller walkaround with startup-video evidence represented by sampled frames.
@@ -254,6 +323,37 @@ Artifacts are written inside the VM under:
 ```text
 /home/ubuntu/qa-output/<run-id>/
 ```
+
+To include the feature-flagged demo valuation and reconditioning estimate in generated packets:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && PORT=8799 DEMO_VALUATION_ENABLED=true DEMO_VALUATION_MODE=fixture OPENAI_VISION_MODE=fixture npm start'
+```
+
+In another shell:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && SIDECAR_URL=http://127.0.0.1:8799 npm run qa:user-flow'
+```
+
+Expected additions:
+
+- packet JSON includes `demoValuation`
+- packet Markdown includes `Demo Valuation And Recon Estimate`
+- partial evidence scenarios show a hold posture
+- complete evidence scenarios show a QA-only demo trade value range and recon budget
+
+For live GPT-5.5 web research on the actual QA machine instead of fallback fixture comps, start the temporary sidecar with live demo valuation:
+
+```bash
+multipass exec trade-in-agent-openclaw-dev -- bash -lc 'cd /home/ubuntu/trade-in-agent/app && PORT=8799 DEMO_VALUATION_ENABLED=true DEMO_VALUATION_MODE=live DEMO_VALUATION_MODEL=gpt-5.5 OPENAI_VISION_MODE=fixture npm start'
+```
+
+Then run the same `SIDECAR_URL=http://127.0.0.1:8799 npm run qa:user-flow` command. Expected live additions:
+
+- `packet.demoValuation.researchMode` is `web_search`
+- `packet.demoValuation.webResearch.usedWebSearch` is `true` when OpenAI web search succeeds
+- `packet.demoValuation.comparableSales` should reflect public researched comps for the actual machine under test, not just the fallback S780 fixture set
 
 For local host runs with a reachable sidecar:
 

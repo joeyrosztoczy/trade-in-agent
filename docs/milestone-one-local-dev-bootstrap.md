@@ -1,4 +1,4 @@
-# Milestone One: Local Development Bootstrap
+# Milestone 1: Local Development Bootstrap
 
 ## Goal
 
@@ -63,7 +63,7 @@ The app service should be designed so it can run both:
 - directly on the host for development
 - inside the Multipass VM for OpenClaw integration validation
 
-## Milestone One Deliverables
+## Milestone 1 Deliverables
 
 1. Repo-local app service skeleton.
 2. Postgres-backed development database.
@@ -78,9 +78,9 @@ The app service should be designed so it can run both:
 
 ## Phase One Coverage Map
 
-Milestone One intentionally covers every step from the Phase 1 Local Foundations section of the implementation plan.
+Milestone 1 intentionally covers every step from the Phase 1 Local Foundations section of the implementation plan.
 
-| Phase 1 step | Milestone One coverage |
+| Phase 1 step | Milestone 1 coverage |
 |---|---|
 | Initialize app service | Repo-local app service skeleton, host bootstrap, Multipass bootstrap, and dev script. |
 | Add workflow DB schema | Postgres schema, migrations, and seed data. |
@@ -122,7 +122,7 @@ trade-in-agent/
 
 This structure can evolve once the implementation framework is chosen.
 
-## App Service Scope For Milestone One
+## App Service Scope For Milestone 1
 
 The app service should expose enough behavior to prove the architecture without solving valuation yet.
 
@@ -150,7 +150,7 @@ Required behavior:
 - generate a draft packet from stored data
 - persist everything in Postgres
 
-Out of scope for Milestone One:
+Out of scope for Milestone 1:
 
 - numeric trade value calculation
 - real Machine Finder Pro sync
@@ -197,7 +197,7 @@ The app service should be reachable from:
 - the Multipass VM during integration validation
 - the production Stotz Sales VM when deployed later
 
-For Milestone One, the agent can call the sidecar through simple local HTTP requests or a thin tool wrapper. The important part is the stable API contract and persisted state.
+For Milestone 1, the agent can call the sidecar through simple local HTTP requests or a thin tool wrapper. The important part is the stable API contract and persisted state.
 
 ## Host Bootstrap Spec
 
@@ -315,7 +315,7 @@ It may stub:
 
 ## Sample Combine Case Fixture
 
-Milestone One should include one seed case:
+Milestone 1 should include one seed case:
 
 - unit type: combine
 - make: John Deere
@@ -357,9 +357,9 @@ Checks:
    - route
    - next step
 
-## Milestone One Acceptance Criteria
+## Milestone 1 Acceptance Criteria
 
-Milestone One is complete when:
+Milestone 1 is complete when:
 
 - a developer can bootstrap the host development environment from a clean checkout
 - a developer can bootstrap the Multipass VM environment from a clean checkout
@@ -375,5 +375,5 @@ Milestone One is complete when:
 - Should Multipass mount the local repo or clone/copy it into the VM?
 - Should the VM install the full Stotz Sales deployment from `openclaw-on-azure`, or a minimal OpenClaw runtime with matching workspace files?
 - Which local port should be reserved for the sidecar long term?
-- Should media storage in Milestone One be local-only, SharePoint-stubbed, or SharePoint-backed?
+- Should media storage in Milestone 1 be local-only, SharePoint-stubbed, or SharePoint-backed?
 - Which framework should the app service use?

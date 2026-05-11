@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { getChecklist, normalizeUnitType } from './checklists.js';
 
 const PROMPT_VERSION = 'phase-two-field-evidence-v2';
 
 function defaultFixture(evidence = {}, tradeCase = {}, request = {}) {
   const slot = evidence.checklistSlot || 'unknown';
   const machine = tradeCase.machine || {};
+  const slotLabel = describeSlot(machine.unitType, slot);
   const isDark = String(evidence.notes || evidence.storageUri || '').toLowerCase().includes('dark');
   const isStartupVideo = evidence.mediaType === 'video' || slot === 'startup_video';
   const sampledFrameCount = Array.isArray(request.sampledFrames) ? request.sampledFrames.length : 0;
@@ -30,7 +32,7 @@ function defaultFixture(evidence = {}, tradeCase = {}, request = {}) {
       visibleConditionFindings: [
         {
           section: slot,
-          finding: `Fixture visual review for ${machine.make || 'machine'} ${machine.model || ''} ${slot}: no major visible issue recorded.`,
+          finding: `Fixture visual review for ${machine.make || 'machine'} ${machine.model || ''} ${slotLabel}: no major visible issue recorded.`,
           severity: 'info',
           confidence: 0.55,
           needsFollowUp: false
@@ -56,6 +58,12 @@ function defaultFixture(evidence = {}, tradeCase = {}, request = {}) {
     },
     rawResponse: { fixture: true }
   };
+}
+
+function describeSlot(unitType, slot) {
+  const normalizedUnitType = normalizeUnitType(unitType || 'combine');
+  const label = getChecklist(normalizedUnitType).find(([definitionSlot]) => definitionSlot === slot)?.[1];
+  return label || humanizeToken(slot);
 }
 
 export async function analyzeEvidenceMedia({ evidence, tradeCase, request = {} }) {
@@ -287,4 +295,12 @@ function textValue(item) {
     item.recommendation ||
     JSON.stringify(item)
   );
+}
+
+function humanizeToken(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, letter => letter.toUpperCase());
 }

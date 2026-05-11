@@ -67,6 +67,49 @@ test('packet markdown is reviewer oriented and human-readable', () => {
       'Ask the rep whether any warning lights appeared during startup.'
     ],
     reconScenarios: [],
+    demoValuation: {
+      enabled: true,
+      demoOnly: true,
+      status: 'generated',
+      approvalStatus: 'demo_reviewable',
+      disclaimer: 'Demo estimate for controlled QA only. This is not an approved trade offer.',
+      valuation: {
+        currency: 'USD',
+        comparableAskingRange: { low: 257000, high: 400000 },
+        estimatedTradeValueRange: { low: 185000, high: 330000 },
+        confidence: 'medium_low',
+        methodology: 'Comparable asking range minus retail-to-trade spread, demo recon allowance, hour/year adjustment, and evidence/risk buffer.'
+      },
+      reconBudget: {
+        currency: 'USD',
+        estimatedRange: { low: 18000, high: 35000 },
+        scenario: 'standard',
+        lineItems: [
+          {
+            category: 'baseline_reconditioning_allowance',
+            range: { low: 18000, high: 35000 },
+            reason: 'Standard demo allowance based on route and evidence posture.'
+          }
+        ]
+      },
+      comparableSales: [
+        {
+          source: 'MachineFinder',
+          sourceUrl: 'https://www.machinefinder.com/ww/en-US/machines/2020-john-deere-s780-combine-11247044',
+          make: 'John Deere',
+          model: 'S780',
+          modelYear: 2020,
+          currency: 'USD',
+          askingPrice: 314500,
+          engineHours: 1486,
+          location: 'LaGrange, IN'
+        }
+      ],
+      riskAdjustments: [],
+      reviewerQuestions: [
+        'Validate options, tire/track condition, and any visible wear against the uploaded evidence.'
+      ]
+    },
     recommendation: {
       preliminaryTradeValue: null,
       reason: 'Numeric valuation is out of scope.',
@@ -81,6 +124,9 @@ test('packet markdown is reviewer oriented and human-readable', () => {
   assert.match(markdown, /Ready for standard review/);
   assert.match(markdown, /Cab display with engine and separator hours/);
   assert.match(markdown, /Startup video sampled frames/);
+  assert.match(markdown, /Demo Valuation And Recon Estimate/);
+  assert.match(markdown, /\$185,000 to \$330,000/);
+  assert.match(markdown, /controlled QA only/);
   assert.doesNotMatch(markdown, /\bcab_display_hours\b/);
 });
 

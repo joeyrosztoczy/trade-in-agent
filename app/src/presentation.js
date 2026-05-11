@@ -107,6 +107,37 @@ export function buildGuidanceMessage({
   return lines.join('\n');
 }
 
+export function buildProcessingAcknowledgementMessage({
+  caseNumber,
+  registeredCount = 0,
+  queuedCount = 0,
+  nextEvidenceRequests = [],
+  checklist = {},
+  unitType = checklist.unitType || 'combine'
+} = {}) {
+  const mediaLabel = pluralize(registeredCount, 'item', 'items');
+  const lines = [];
+
+  if (caseNumber) lines.push(`Trade case ${caseNumber} is open.`);
+  lines.push(`I added ${registeredCount} new ${mediaLabel} and started processing ${queuedCount || registeredCount} in the background.`);
+  lines.push('You can keep sending photos or video while that finishes.');
+
+  const nextSlots = nextEvidenceRequests
+    .map(request => request.slot)
+    .filter(Boolean)
+    .slice(0, 3);
+  if (nextSlots.length) {
+    lines.push(`Next best shots: ${describeChecklistSlots(unitType, nextSlots, checklist, { limit: 3 }).join('; ')}.`);
+  } else {
+    const fallback = (checklist.nextRecommendedSlots || checklist.missingSlots || []).slice(0, 3);
+    if (fallback.length) {
+      lines.push(`Next best shots: ${describeChecklistSlots(unitType, fallback, checklist, { limit: 3 }).join('; ')}.`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 export function buildReviewerBrief(packet) {
   const conditionFindings = packet.visibleConditionFindings || [];
   const qualityFindings = packet.evidenceQualityFindings || [];
@@ -148,6 +179,7 @@ export function packetToMarkdown(packet) {
   const weak = describeChecklistSlots(unitType, checklist.weakSlots || [], checklist, { limit: 12 });
   const retake = describeChecklistSlots(unitType, checklist.retakeSlots || [], checklist, { limit: 12 });
   const brief = packet.reviewerBrief || buildReviewerBrief(packet);
+  const demoValuationMarkdown = renderDemoValuation(packet.demoValuation);
 
   return `# Trade Evaluation Draft Packet
 
@@ -198,11 +230,13 @@ ${bulletList(brief.limitations, '- None recorded')}
 
 ${bulletList(brief.fieldFollowUps, '- None')}
 
+${demoValuationMarkdown}
 ## Recon And Valuation Notes
 
-- Preliminary trade value: not set in this milestone.
+- Preliminary trade value: ${packet.demoValuation ? moneyRange(packet.demoValuation.valuation?.estimatedTradeValueRange, packet.demoValuation.valuation?.currency) : 'not set in this milestone.'}
+- Demo recon budget: ${packet.demoValuation ? moneyRange(packet.demoValuation.reconBudget?.estimatedRange, packet.demoValuation.reconBudget?.currency) : 'not set in this milestone.'}
 - Pricing note: ${packet.recommendation?.reason || 'Reviewer should combine this packet with sales history, competitive listings, and business-system data.'}
-- Reconditioning stance: use the light, standard, and heavy scenarios below as placeholders until approved recon pricing inputs are integrated.
+- Reconditioning stance: ${packet.demoValuation ? 'use the demo recon range as a QA-only starting point, then validate with approved recon pricing inputs.' : 'use the light, standard, and heavy scenarios below as placeholders until approved recon pricing inputs are integrated.'}
 
 ${(packet.reconScenarios || []).map(scenario => `### ${humanizeToken(scenario.scenarioType)} Recon Scenario
 
@@ -218,9 +252,80 @@ function compactList(items, { limit } = {}) {
   return [...clean.slice(0, limit), `plus ${clean.length - limit} more`];
 }
 
+function pluralize(count, singular, plural) {
+  return Number(count) === 1 ? singular : plural;
+}
+
 function bulletList(items = [], fallback) {
   const clean = items.filter(Boolean);
   return clean.length ? clean.map(item => `- ${item}`).join('\n') : fallback;
+}
+
+function renderDemoValuation(demoValuation) {
+  if (!demoValuation) return '';
+  const valuation = demoValuation.valuation || {};
+  const recon = demoValuation.reconBudget || {};
+  const comparableLines = (demoValuation.comparableSales || []).slice(0, 5).map(comp => {
+    const hours = comp.engineHours == null ? 'unknown hours' : `${comp.engineHours} engine hours`;
+    const source = comp.sourceUrl ? `[${comp.source || 'source'}](${comp.sourceUrl})` : comp.source || 'source';
+    return `- ${comp.modelYear || 'unknown'} ${comp.make || ''} ${comp.model || ''}: ${money(comp.askingPrice, comp.currency)} asking, ${hours}, ${comp.location || 'unknown location'} (${source})`;
+  });
+  const reconLines = (recon.lineItems || []).map(item => (
+    `- ${humanizeToken(item.category)}: ${moneyRange(item.range, recon.currency)} - ${item.reason || 'No reason recorded.'}`
+  ));
+  const adjustmentLines = (demoValuation.riskAdjustments || []).map(item => (
+    `- ${humanizeToken(item.category)}: ${moneyRange(item.range, valuation.currency)} - ${item.reason || 'No reason recorded.'}`
+  ));
+  const sourceNoteLines = [
+    ...(demoValuation.sourceNotes || []),
+    ...((demoValuation.webResearch?.citedUrls || []).slice(0, 5).map(source => (
+      source.url ? `[${source.title || source.url}](${source.url})` : source.title
+    )))
+  ].filter(Boolean);
+
+  return `## Demo Valuation And Recon Estimate
+
+- Status: ${humanizeToken(demoValuation.status || 'generated')}
+- Research mode: ${humanizeToken(demoValuation.researchMode || demoValuation.mode || 'unknown')}
+- Approval posture: ${humanizeToken(demoValuation.approvalStatus || valuation.approvalStatus || 'demo_reviewable')}
+- Demo trade value range: ${moneyRange(valuation.estimatedTradeValueRange, valuation.currency)}
+- Comparable asking range: ${moneyRange(valuation.comparableAskingRange, valuation.currency)}
+- Demo recon budget: ${moneyRange(recon.estimatedRange, recon.currency)}
+- Confidence: ${humanizeToken(valuation.confidence || 'low')}
+- Methodology: ${valuation.methodology || 'Comparable asking range minus demo risk and recon allowances.'}
+- Guardrail: ${demoValuation.disclaimer || 'Demo estimate for controlled QA only.'}
+
+Comparable basis:
+${comparableLines.length ? comparableLines.join('\n') : '- None available'}
+
+Recon line items:
+${reconLines.length ? reconLines.join('\n') : '- None recorded'}
+
+Risk/value adjustments:
+${adjustmentLines.length ? adjustmentLines.join('\n') : '- None recorded'}
+
+Source notes:
+${bulletList(sourceNoteLines, '- None recorded')}
+
+Reviewer questions:
+${bulletList(demoValuation.reviewerQuestions || [], '- None')}
+
+`;
+}
+
+function moneyRange(range, currency = 'USD') {
+  if (!range || range.low == null || range.high == null) return 'not available';
+  if (range.low === range.high) return money(range.low, currency);
+  return `${money(range.low, currency)} to ${money(range.high, currency)}`;
+}
+
+function money(value, currency = 'USD') {
+  if (value == null || Number.isNaN(Number(value))) return 'not available';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    maximumFractionDigits: 0
+  }).format(Number(value));
 }
 
 function humanizeToken(value) {
