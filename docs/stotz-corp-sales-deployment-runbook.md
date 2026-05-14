@@ -27,12 +27,48 @@ The production-like Stotz Teams test target is:
 - Agent tool docs: `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-TOOLS.md`
 - Agent route docs: `/home/openclaw/openclaw-workspace/docs/trade-in-agent/TRADE-IN-EVALUATION-ROUTE.md`
 - Agent project instructions: `/home/openclaw/openclaw-workspace/PROJECT.md`
+- OpenAPI contract: `/home/openclaw/openclaw-workspace/trade-in-agent/app/openapi.json`
+- Product-owned OpenClaw plugin package: `/home/openclaw/openclaw-workspace/trade-in-agent/packages/openclaw-plugin`
 - Sidecar systemd unit: `/etc/systemd/system/trade-in-agent-sidecar.service`
 - Sidecar database: Postgres database `trade_in_agent_prod`
 - OpenClaw desired runtime config: `/home/openclaw/openclaw-workspace/.openclaw/runtime-config.json`
 - OpenClaw actual runtime config: `/home/openclaw/.openclaw/openclaw.json`
 
 The sidecar should use the same Stotz corporate sales OpenAI key as OpenClaw. On the VM, source it from OpenClaw's existing environment file and write only the `OPENAI_API_KEY=...` assignment into the sidecar `.env`. Never print the key in logs or documentation.
+
+## Boundary Contract
+
+The sidecar/OpenClaw boundary is versioned as:
+
+```text
+trade-in-sidecar/v1
+```
+
+`trade-in-agent` owns:
+
+- sidecar request and response schemas
+- `app/openapi.json`
+- contract tests
+- `packages/openclaw-plugin`
+- trade-in workflow business logic
+
+`openclaw-on-azure` should only need deployment-shape fields like:
+
+```json
+{
+  "tools": {
+    "tradeInAgent": {
+      "enabled": true,
+      "baseUrl": "http://127.0.0.1:8788",
+      "timeoutMs": 240000,
+      "pluginPackage": "@premier/trade-in-agent-openclaw-plugin",
+      "apiVersion": "trade-in-sidecar/v1"
+    }
+  }
+}
+```
+
+Do not duplicate endpoint payload details or trade-in business rules in `openclaw-on-azure`.
 
 Live demo packet generation uses GPT-5.5/public web research and can take longer than 60 seconds. The Trade-In Agent plugin timeout must be `240000` in both:
 
@@ -157,9 +193,10 @@ Required behavior:
 3. If no active case exists, call `POST /trade-cases`.
 4. On create or resume, always include the returned `caseNumber` and `id` in the user-facing reply.
 5. Use sidecar checklist and guidance for the next evidence ask.
-6. Register and analyze photos/videos through the sidecar when attachments are available.
-7. Use the guidance route, confidence, risk flags, and review status when replying.
-8. Use `POST /trade-cases/:id/packet` for reviewer handoff.
+6. Register Teams photos/videos with the async field upload path (`trade_case_register_field_uploads` / `trade_in_register_field_uploads`) and reply immediately with the returned acknowledgement.
+7. Do not call the single-evidence analysis tool in the same Teams turn after uploads; use processing status/guidance for follow-up.
+8. Use the guidance route, confidence, risk flags, and review status when replying.
+9. Use `POST /trade-cases/:id/packet` for reviewer handoff.
 
 Tool contract and Teams evidence-loop guidance:
 

@@ -19,17 +19,24 @@ import {
   updateTradeCase
 } from './repository.js';
 import { closePool } from './db.js';
+import { API_VERSION, ContractSchemas } from './contracts/index.js';
+import { validateRequestBody, validateResponseBody } from './http/validation.js';
 
 const PORT = Number(process.env.PORT || 8788);
 
-function send(res, status, body, headers = {}) {
-  const payload = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+function send(res, status, body, headers = {}, responseSchema = null) {
+  const responseBody = typeof body === 'string' ? body : validateResponseBody(responseSchema, body);
+  const payload = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody, null, 2);
   res.writeHead(status, {
     'Content-Type': typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     ...headers
   });
   res.end(payload);
+}
+
+async function readContractJson(req, schema) {
+  return validateRequestBody(schema, await readJson(req));
 }
 
 async function readJson(req) {
@@ -65,15 +72,15 @@ export function createServer() {
 
       if (req.method === 'GET' && url.pathname === '/health') {
         const health = await healthCheck();
-        return send(res, 200, { ...health, service: 'trade-in-agent-sidecar', requestId });
+        return send(res, 200, { ...health, apiVersion: API_VERSION, service: 'trade-in-agent-sidecar', requestId }, {}, ContractSchemas.HealthResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 1 && req.method === 'POST') {
-        return send(res, 201, await createTradeCase(await readJson(req)));
+        return send(res, 201, await createTradeCase(await readContractJson(req, ContractSchemas.CreateTradeCaseRequest)), {}, ContractSchemas.TradeCaseResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 1 && req.method === 'GET') {
-        return send(res, 200, { items: await listTradeCases({ includeArchived: url.searchParams.get('includeArchived') === 'true' }) });
+        return send(res, 200, { items: await listTradeCases({ includeArchived: url.searchParams.get('includeArchived') === 'true' }) }, {}, ContractSchemas.ListTradeCasesResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 2 && parts[1] === 'active' && req.method === 'GET') {
@@ -81,91 +88,96 @@ export function createServer() {
         if (!sourceConversationId) return send(res, 400, { error: 'sourceConversationId is required', requestId });
         const tradeCase = await getActiveTradeCase(sourceConversationId);
         if (!tradeCase) return send(res, 404, { error: 'Active trade case not found', requestId });
-        return send(res, 200, tradeCase);
+        return send(res, 200, tradeCase, {}, ContractSchemas.ActiveTradeCaseResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 2 && req.method === 'GET') {
         const tradeCase = await getTradeCase(parts[1]);
         if (!tradeCase) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, tradeCase);
+        return send(res, 200, tradeCase, {}, ContractSchemas.TradeCaseResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 2 && req.method === 'PATCH') {
-        const tradeCase = await updateTradeCase(parts[1], await readJson(req));
+        const tradeCase = await updateTradeCase(parts[1], await readContractJson(req, ContractSchemas.UpdateTradeCaseRequest));
         if (!tradeCase) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, tradeCase);
+        return send(res, 200, tradeCase, {}, ContractSchemas.TradeCaseResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 2 && req.method === 'DELETE') {
         const archived = await archiveTradeCase(parts[1]);
         if (!archived) return send(res, 404, { error: 'Trade case not found or already archived', requestId });
-        return send(res, 200, { ok: true, id: archived.id, archivedAt: archived.archived_at });
+        return send(res, 200, { ok: true, id: archived.id, archivedAt: archived.archived_at }, {}, ContractSchemas.ArchiveResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'archive' && req.method === 'POST') {
         const archived = await archiveTradeCase(parts[1]);
         if (!archived) return send(res, 404, { error: 'Trade case not found or already archived', requestId });
-        return send(res, 200, { ok: true, id: archived.id, archivedAt: archived.archived_at });
+        return send(res, 200, { ok: true, id: archived.id, archivedAt: archived.archived_at }, {}, ContractSchemas.ArchiveResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'evidence' && req.method === 'POST') {
-        const evidence = await addEvidence(parts[1], await readJson(req));
+        const evidence = await addEvidence(parts[1], await readContractJson(req, ContractSchemas.EvidenceCreateRequest));
         if (!evidence) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 201, evidence);
+        return send(res, 201, evidence, {}, ContractSchemas.EvidenceResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 4 && parts[2] === 'evidence' && parts[3] === 'batch' && req.method === 'POST') {
-        const evidence = await addEvidenceBatch(parts[1], await readJson(req));
+        const evidence = await addEvidenceBatch(parts[1], await readContractJson(req, ContractSchemas.EvidenceBatchCreateRequest));
         if (!evidence) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 201, evidence);
+        return send(res, 201, evidence, {}, ContractSchemas.EvidenceBatchCreateResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 4 && parts[2] === 'evidence' && req.method === 'PATCH') {
-        const evidence = await updateEvidence(parts[1], parts[3], await readJson(req));
+        const evidence = await updateEvidence(parts[1], parts[3], await readContractJson(req, ContractSchemas.EvidenceUpdateRequest));
         if (!evidence) return send(res, 404, { error: 'Evidence item not found', requestId });
-        return send(res, 200, evidence);
+        return send(res, 200, evidence, {}, ContractSchemas.EvidenceResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 5 && parts[2] === 'evidence' && parts[4] === 'analyze' && req.method === 'POST') {
-        const analysis = await analyzeEvidence(parts[1], parts[3], await readJson(req));
+        const analysis = await analyzeEvidence(parts[1], parts[3], await readContractJson(req, ContractSchemas.AnalyzeEvidenceRequest));
         if (!analysis) return send(res, 404, { error: 'Trade case or evidence item not found', requestId });
-        return send(res, 200, analysis);
+        return send(res, 200, analysis, {}, ContractSchemas.AnalyzeEvidenceResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'checklist' && req.method === 'GET') {
         const checklist = await getChecklistStatus(parts[1]);
         if (!checklist) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, checklist);
+        return send(res, 200, checklist, {}, ContractSchemas.ChecklistResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'processing-status' && req.method === 'GET') {
         const status = await getProcessingStatus(parts[1]);
         if (!status) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, status);
+        return send(res, 200, status, {}, ContractSchemas.ProcessingStatusResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'guidance' && req.method === 'POST') {
         const guidance = await generateGuidance(parts[1]);
         if (!guidance) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, guidance);
+        return send(res, 200, guidance, {}, ContractSchemas.GuidanceResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'routing' && req.method === 'POST') {
         const routing = await getRoutingStatus(parts[1]);
         if (!routing) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 200, routing);
+        return send(res, 200, routing, {}, ContractSchemas.RoutingResponse);
       }
 
       if (parts[0] === 'trade-cases' && parts.length === 3 && parts[2] === 'packet' && req.method === 'POST') {
         const packet = await generatePacket(parts[1]);
         if (!packet) return send(res, 404, { error: 'Trade case not found', requestId });
-        return send(res, 201, packet);
+        return send(res, 201, packet, {}, ContractSchemas.PacketResponse);
       }
 
       return send(res, 404, { error: 'Not found', requestId });
     } catch (error) {
       const status = error.statusCode || 500;
-      return send(res, status, { error: error.message || String(error), requestId });
+      return send(res, status, {
+        error: error.message || String(error),
+        code: error.code,
+        issues: error.issues,
+        requestId
+      });
     }
   });
 }

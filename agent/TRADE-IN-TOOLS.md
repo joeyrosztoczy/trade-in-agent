@@ -2,11 +2,68 @@
 
 The trade-in sidecar runs beside OpenClaw on the local VM.
 
+API version:
+
+```text
+trade-in-sidecar/v1
+```
+
 Base URL:
 
 ```text
 http://127.0.0.1:8788
 ```
+
+Generated contract:
+
+```text
+/home/openclaw/openclaw-workspace/trade-in-agent/app/openapi.json
+```
+
+Product-owned OpenClaw plugin package:
+
+```text
+packages/openclaw-plugin
+@premier/trade-in-agent-openclaw-plugin
+```
+
+## Stable Tool Names
+
+Preferred stable tools exposed by the product-owned plugin:
+
+- `trade_case_health`
+- `trade_case_start`
+- `trade_case_active`
+- `trade_case_get`
+- `trade_case_update`
+- `trade_case_register_field_uploads`
+- `trade_case_add_evidence`
+- `trade_case_analyze_evidence`
+- `trade_case_checklist`
+- `trade_case_processing_status`
+- `trade_case_guidance`
+- `trade_case_routing`
+- `trade_case_packet`
+- `trade_case_archive`
+
+Current deployment-compatible aliases may also be visible:
+
+- `trade_in_health`
+- `trade_in_start_or_resume`
+- `trade_in_start_case`
+- `trade_in_get_active_case`
+- `trade_in_get_case`
+- `trade_in_update_case`
+- `trade_in_register_field_uploads`
+- `trade_in_register_evidence`
+- `trade_in_analyze_evidence`
+- `trade_in_processing_status`
+- `trade_in_get_checklist`
+- `trade_in_get_guidance`
+- `trade_in_generate_packet`
+- `trade_in_archive_case`
+
+Use stable tools when available. Use legacy aliases only for deployments that have not yet loaded the product-owned package. Do not hand-build `curl` calls when a first-class tool is available.
 
 ## Field Conversation Rules
 
@@ -17,14 +74,14 @@ http://127.0.0.1:8788
 - Never present visual inference as a full mechanical inspection.
 - Ask for the smallest useful next set of photos/video.
 - Use the sidecar as durable state; do not rely on chat memory alone.
-- Do not block the Teams reply while every uploaded photo is analyzed. Register uploads with async processing, acknowledge the case number, then use processing status/guidance for follow-up replies.
+- Do not block the Teams reply while every uploaded photo is analyzed. For Teams uploads, call `trade_case_register_field_uploads` when available, acknowledge the case number, then use processing status/guidance for follow-up replies.
 
 See `TRADE-IN-EVALUATION-ROUTE.md` for trigger phrases and the required start/resume behavior.
 
 ## Core Flow
 
 1. Create or resume a trade case.
-2. Register Teams attachments as evidence with `processingMode: "async"` whenever the user uploads photos/video.
+2. Register Teams attachments with `trade_case_register_field_uploads` whenever the user uploads photos/video.
 3. Reply immediately with the sidecar acknowledgement: case number, number of items registered, and next best field evidence.
 4. Use `GET /trade-cases/:id/processing-status` when the user asks what is done so far or whether the photos worked.
 5. Fetch guidance after processing completes or when the rep asks for current next steps.
@@ -72,9 +129,31 @@ When speaking to the user:
 - `POST /trade-cases/:id/guidance`
 - `POST /trade-cases/:id/packet`
 
+## Fields Not To Invent
+
+Only report these fields when they are returned by the sidecar or packet:
+
+- `caseNumber`
+- `id` / `tradeCaseId`
+- `route`
+- `reviewStatus`
+- `confidence`
+- `riskFlags`
+- `qualityStatus`
+- `analysisStatus`
+- `visibleConditionFindings`
+- `evidenceQualityFindings`
+- `demoValuation`
+- `preliminaryTradeValue`
+- `demoReconBudget`
+
+If a value is absent, say it is not available yet. Do not create a case id, route, valuation, recon budget, serial number, or hours from chat memory.
+
 ## Visual Inference
 
-For normal Teams uploads, prefer async batch registration:
+For normal Teams uploads, use `trade_case_register_field_uploads`. It opens or resumes the case, registers all uploaded evidence, forces async background processing, and returns a `fieldReply` object.
+
+If only the lower-level HTTP fallback is available, batch registration defaults to async. You may still pass `processingMode: "async"` explicitly:
 
 ```json
 {
@@ -92,19 +171,20 @@ For normal Teams uploads, prefer async batch registration:
 }
 ```
 
-The response includes `caseNumber`, `registeredCount`, `queuedCount`, `processingSummary`, `nextEvidenceRequests`, and `message`. Use `message` as the basis for the immediate Teams reply.
+The response includes `caseNumber`, `registeredCount`, `queuedCount`, `processingSummary`, `nextEvidenceRequests`, and `message`. Use `fieldReply.message` or `message` as the basis for the immediate Teams reply.
 
-After registering a media item, call:
+Do not call the single-evidence analysis tool in the same user-facing turn after a normal Teams upload. Use processing status instead:
 
 ```text
-POST /trade-cases/:id/evidence/:evidenceId/analyze
+GET /trade-cases/:id/processing-status
 ```
 
-Use synchronous analyze only when a tool flow explicitly needs to wait for one evidence item. To queue one item without blocking:
+The single-evidence analysis endpoint queues by default. Use synchronous analyze only for internal/dev/reviewer QA when a tool flow explicitly needs to wait for one evidence item:
 
 ```json
 {
-  "async": true,
+  "allowSynchronousAnalysis": true,
+  "processingMode": "sync",
   "analysisMode": "field_evidence_quality",
   "checklistSlot": "front_45"
 }

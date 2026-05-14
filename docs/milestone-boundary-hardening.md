@@ -260,6 +260,7 @@ The package should expose stable OpenClaw tool names:
 
 - `trade_case_start`
 - `trade_case_active`
+- `trade_case_register_field_uploads`
 - `trade_case_add_evidence`
 - `trade_case_analyze_evidence`
 - `trade_case_guidance`
@@ -355,9 +356,22 @@ Must return:
 - media type
 - initial checklist slot hints
 
+### `trade_case_register_field_uploads`
+
+Primary Teams upload tool. Creates or resumes the active case, registers one or more uploaded media items, queues background analysis, and returns a user-facing acknowledgement. It must not run synchronous visual inference in the user-facing turn.
+
+Must return:
+
+- `caseNumber`
+- `id`
+- registered evidence count
+- queued evidence count
+- acknowledgement text
+- next status tool hint
+
 ### `trade_case_analyze_evidence`
 
-Runs visual inference for one evidence item.
+Runs or queues visual inference for one evidence item. It should queue by default and only run synchronously when an internal/dev/reviewer flow explicitly asks for synchronous analysis.
 
 Must return:
 

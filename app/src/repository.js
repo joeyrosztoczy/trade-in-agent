@@ -307,7 +307,7 @@ export async function addEvidence(id, input = {}) {
 
 export async function addEvidenceBatch(id, input = {}) {
   const items = Array.isArray(input.items) ? input.items : Array.isArray(input.evidence) ? input.evidence : [];
-  const processingMode = normalizeProcessingMode(input.processingMode || input.processing_mode);
+  const processingMode = normalizeProcessingMode(input.processingMode || input.processing_mode || 'async');
   const shouldQueue = processingMode === 'async';
   const created = [];
   for (const item of items) {
@@ -454,7 +454,7 @@ async function persistRoutingDecision(id, routing) {
 }
 
 export async function analyzeEvidence(tradeCaseId, evidenceId, input = {}) {
-  if (shouldAnalyzeAsync(input)) {
+  if (shouldAnalyzeAsync(input, { defaultMode: 'async' })) {
     return queueEvidenceAnalysis(tradeCaseId, evidenceId, input);
   }
 
@@ -1012,7 +1012,7 @@ function rowToEvidence(row = {}) {
     sourceMessageId: row.source_message_id,
     sourceAttachmentId: row.source_attachment_id,
     metadata: row.metadata_json || {},
-    checklistSlotConfidence: row.checklist_slot_confidence,
+    checklistSlotConfidence: numberOrNull(row.checklist_slot_confidence),
     notes: row.notes
   };
 }
@@ -1084,10 +1084,12 @@ function normalizeProcessingMode(value) {
   return String(value || '').toLowerCase() === 'async' ? 'async' : 'sync';
 }
 
-function shouldAnalyzeAsync(input = {}) {
-  return input.async === true ||
-    input.queue === true ||
-    normalizeProcessingMode(input.processingMode || input.processing_mode) === 'async';
+function shouldAnalyzeAsync(input = {}, { defaultMode = 'sync' } = {}) {
+  const explicitMode = input.processingMode || input.processing_mode;
+  if (String(explicitMode || '').toLowerCase() === 'sync') return false;
+  if (input.async === true || input.queue === true) return true;
+  if (normalizeProcessingMode(explicitMode) === 'async') return true;
+  return normalizeProcessingMode(defaultMode) === 'async';
 }
 
 function stripAsyncFlags(input = {}) {
