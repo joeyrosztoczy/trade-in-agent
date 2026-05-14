@@ -1,0 +1,368 @@
+{
+  "apiVersion": "trade-in-review-fixtures/v1",
+  "capturedAt": "2026-05-14",
+  "notes": [
+    "Public listing facts captured for controlled product QA. Prices are asking prices and should not be treated as approved trade values.",
+    "Photo URLs are public listing/media URLs used to exercise the evidence intake and review queue workflow."
+  ],
+  "examples": [
+    {
+      "id": "stotz-11512615",
+      "sourceName": "Stotz Equipment",
+      "dealer": "Stotz Equipment",
+      "sourceUrl": "https://stotzeq.com/used-equipment/11512615",
+      "listingId": "11512615",
+      "capturedFrom": "https://stotzeq.com/api/used-equipment/11512615",
+      "machine": {
+        "unitType": "combine",
+        "make": "John Deere",
+        "model": "S780",
+        "modelYear": 2024,
+        "serialOrPin": "1H0S780SKPT830259",
+        "engineHours": 262,
+        "separatorHours": 218,
+        "location": "Burley, ID",
+        "attachmentsOrOptions": "Small grain, 2WD, singles, Yield Monitor, Fore/Aft, Active Yield, Advisor Package, Powercast Tailboard, Power Folding Bin Extension, no header."
+      },
+      "listingFacts": {
+        "askingPrice": 589000,
+        "currency": "USD",
+        "status": "On Lot",
+        "stockNumber": "SU116817",
+        "warranty": "Extended Warranty (Comprehensive) 750h/36m, end date 2027-04-11"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://photos.machinefinder.com/15/11512615/78823624_large_90519.jpg", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://photos.machinefinder.com/15/11512615/78823626_large_16351.jpg", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://photos.machinefinder.com/15/11512615/78823632_large_56597.jpg", "caption": "Walkaround photo" },
+        { "slot": "serial_plate", "url": "https://photos.machinefinder.com/15/11512615/78823677_large_43414.jpg", "caption": "Identity evidence candidate" },
+        { "slot": "cab_display_hours", "url": "https://photos.machinefinder.com/15/11512615/78823672_large_83707.jpg", "caption": "Cab and hour display candidate" },
+        { "slot": "engine_compartment", "url": "https://photos.machinefinder.com/15/11512615/78865094_large_35015.jpg", "caption": "Engine or service access candidate" }
+      ]
+    },
+    {
+      "id": "stotz-10036066",
+      "sourceName": "Stotz Equipment",
+      "dealer": "Stotz Equipment",
+      "sourceUrl": "https://stotzeq.com/used-equipment/10036066",
+      "listingId": "10036066",
+      "machine": {
+        "unitType": "combine",
+        "make": "John Deere",
+        "model": "S780",
+        "modelYear": 2022,
+        "serialOrPin": "1H0S780SLNT820609",
+        "engineHours": 762,
+        "separatorHours": 486,
+        "location": "Twin Falls, ID",
+        "attachmentsOrOptions": "Stotz listing with 33 public photos; combine configuration details to be verified by reviewer."
+      },
+      "listingFacts": {
+        "askingPrice": 449000,
+        "currency": "USD",
+        "stockNumber": "SU003916"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://photos.machinefinder.com/66/10036066/70722456_large_43656.jpg", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://photos.machinefinder.com/66/10036066/70722502_large_59629.jpg", "caption": "Walkaround photo" },
+        { "slot": "cab_display_hours", "url": "https://photos.machinefinder.com/66/10036066/70722500_large_39545.jpg", "caption": "Cab evidence placeholder from listing set" },
+        { "slot": "engine_compartment", "url": "https://photos.machinefinder.com/66/10036066/70722497_large_91913.jpg", "caption": "Engine evidence placeholder from listing set" }
+      ]
+    },
+    {
+      "id": "stotz-11033496",
+      "sourceName": "Stotz Equipment",
+      "dealer": "Stotz Equipment",
+      "sourceUrl": "https://stotzeq.com/used-equipment/11033496",
+      "listingId": "11033496",
+      "machine": {
+        "unitType": "combine",
+        "make": "John Deere",
+        "model": "S780",
+        "modelYear": 2020,
+        "serialOrPin": "1H0S780SLLT810207",
+        "engineHours": 1039,
+        "separatorHours": 683,
+        "location": "Twin Falls, ID",
+        "attachmentsOrOptions": "Consignment combine with PRWD/duals context from prior QA source notes."
+      },
+      "listingFacts": {
+        "askingPrice": 399999,
+        "currency": "USD",
+        "stockNumber": "Consignment DB6"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://photos.machinefinder.com/96/11033496/73087499_large_48294.jpg", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://photos.machinefinder.com/96/11033496/73087500_large_49349.jpg", "caption": "Walkaround photo" },
+        { "slot": "rear_45", "url": "https://photos.machinefinder.com/96/11033496/73087501_large_62808.jpg", "caption": "Rear walkaround candidate" },
+        { "slot": "damage_leaks_welds", "url": "https://photos.machinefinder.com/96/11033496/73087503_large_65999.jpg", "caption": "Visible damage/leak/weld candidate" }
+      ]
+    },
+    {
+      "id": "stotz-9613450",
+      "sourceName": "Stotz Equipment",
+      "dealer": "Stotz Equipment",
+      "sourceUrl": "https://stotzeq.com/used-equipment/9613450",
+      "listingId": "9613450",
+      "machine": {
+        "unitType": "combine",
+        "make": "John Deere",
+        "model": "S780",
+        "modelYear": 2018,
+        "serialOrPin": "1H0S780SAJ0800452",
+        "engineHours": 1739,
+        "separatorHours": 1171,
+        "location": "Tremonton, UT",
+        "attachmentsOrOptions": "Older S780 with materially higher hours for risk contrast."
+      },
+      "listingFacts": {
+        "askingPrice": 249900,
+        "currency": "USD",
+        "stockNumber": "SU109281"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://photos.machinefinder.com/50/9613450/75742402_large_16594.jpg", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://photos.machinefinder.com/50/9613450/75742404_large_85014.jpg", "caption": "Walkaround photo" },
+        { "slot": "startup_video", "url": "https://img.youtube.com/vi/P6W7T40A1OA/hqdefault.jpg", "mediaType": "video", "sourceVideoUrl": "https://www.youtube.com/watch?v=P6W7T40A1OA", "caption": "Startup video proxy frame" },
+        { "slot": "damage_leaks_welds", "url": "https://photos.machinefinder.com/50/9613450/75742406_large_22505.jpg", "caption": "Dark visible-risk retake candidate", "notes": "dark underside photo from listing QA set" }
+      ]
+    },
+    {
+      "id": "stotz-11477295",
+      "sourceName": "Stotz Equipment",
+      "dealer": "Stotz Equipment",
+      "sourceUrl": "https://stotzeq.com/used-equipment/11477295",
+      "listingId": "11477295",
+      "machine": {
+        "unitType": "combine",
+        "make": "Case IH",
+        "model": "2388",
+        "modelYear": 1998,
+        "serialOrPin": "JJC0188009",
+        "engineHours": 3689,
+        "separatorHours": 3005,
+        "location": "Tremonton, UT",
+        "attachmentsOrOptions": "High-hour older red combine for escalation/risk contrast."
+      },
+      "listingFacts": {
+        "askingPrice": 15000,
+        "currency": "USD",
+        "stockNumber": "Consignment KH12"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://photos.machinefinder.com/95/11477295/77514950_large_50093.jpg", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://photos.machinefinder.com/95/11477295/77514955_large_67547.jpg", "caption": "Walkaround photo" },
+        { "slot": "cab_display_hours", "url": "https://photos.machinefinder.com/95/11477295/77514956_large_69959.jpg", "caption": "Hours evidence placeholder from listing set" },
+        { "slot": "engine_compartment", "url": "https://photos.machinefinder.com/95/11477295/77514953_large_28174.jpg", "caption": "Engine compartment placeholder from listing set" }
+      ]
+    },
+    {
+      "id": "agdealer-1286008",
+      "sourceName": "AgDealer",
+      "dealer": "Brandt Agriculture",
+      "sourceUrl": "https://www.agdealer.com/detail/1286008/used-2023-john-deere-x9-1100-combine",
+      "listingId": "1286008",
+      "machine": {
+        "unitType": "combine",
+        "make": "John Deere",
+        "model": "X9 1100",
+        "modelYear": 2023,
+        "serialOrPin": null,
+        "engineHours": 762,
+        "separatorHours": null,
+        "location": "Watrous, Saskatchewan",
+        "attachmentsOrOptions": "Signature edition X9 1100; public listing reports 36 photos."
+      },
+      "listingFacts": {
+        "askingPrice": 897000,
+        "askingPriceUsd": 657000,
+        "currency": "CAD",
+        "stockNumber": null
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/21806/1286008/21806_1286008_BF694D.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/21806/1286008/21806_1286008_385EF4.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/21806/1286008/21806_1286008_834E39.webp", "caption": "Walkaround photo" },
+        { "slot": "front_tires_tracks", "url": "https://img.agdealer.com/clients/21806/1286008/21806_1286008_68D3D9.webp", "caption": "Tire or track evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1350197",
+      "sourceName": "AgDealer",
+      "dealer": "Redhead Equipment",
+      "sourceUrl": "https://www.agdealer.com/detail/1350197/new-holland-cr990",
+      "listingId": "1350197",
+      "machine": {
+        "unitType": "combine",
+        "make": "New Holland",
+        "model": "CR9.90",
+        "modelYear": 2023,
+        "serialOrPin": null,
+        "engineHours": null,
+        "separatorHours": null,
+        "location": "Kinistino, Saskatchewan",
+        "attachmentsOrOptions": "Public listing reports 7 photos."
+      },
+      "listingFacts": {
+        "askingPrice": 619000,
+        "askingPriceUsd": 453000,
+        "currency": "CAD"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/811/1350197/811_1350197_728FE2.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/811/1350197/811_1350197_FB8979.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/811/1350197/811_1350197_CFC13E.webp", "caption": "Walkaround photo" },
+        { "slot": "engine_compartment", "url": "https://img.agdealer.com/clients/811/1350197/811_1350197_C32715.webp", "caption": "Engine evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1422703",
+      "sourceName": "AgDealer",
+      "dealer": "Foster's Agri-World",
+      "sourceUrl": "https://www.agdealer.com/detail/1422703/2021-claas-lexion-8700",
+      "listingId": "1422703",
+      "machine": {
+        "unitType": "combine",
+        "make": "CLAAS",
+        "model": "LEXION 8700",
+        "modelYear": 2021,
+        "serialOrPin": null,
+        "engineHours": 1230,
+        "separatorHours": 975,
+        "location": "Beaverlodge, Alberta",
+        "attachmentsOrOptions": "580/85R42 front duals, TM6 sieves, CEMOS Auto Crop Flow with Cruise Pilot."
+      },
+      "listingFacts": {
+        "askingPrice": 535000,
+        "askingPriceUsd": 390425,
+        "currency": "CAD",
+        "stockNumber": "8120A"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/33609/1422703/33609_1422703_569A37.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/33609/1422703/33609_1422703_0713EA.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/33609/1422703/33609_1422703_3B21AB.webp", "caption": "Walkaround photo" },
+        { "slot": "cab_display_hours", "url": "https://img.agdealer.com/clients/33609/1422703/33609_1422703_227C7F.webp", "caption": "Cab evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1409936",
+      "sourceName": "AgDealer",
+      "dealer": "True North Equipment",
+      "sourceUrl": "https://www.agdealer.com/detail/1409936/2021-claas-lexion-8700tt",
+      "listingId": "1409936",
+      "machine": {
+        "unitType": "combine",
+        "make": "CLAAS",
+        "model": "LEXION 8700TT",
+        "modelYear": 2021,
+        "serialOrPin": null,
+        "engineHours": 1761,
+        "separatorHours": null,
+        "location": "Grand Forks, ND",
+        "attachmentsOrOptions": "CEMOS Cruise Pilot, premium LED package, residue management, camera, 425 bu tank."
+      },
+      "listingFacts": {
+        "askingPrice": 312031,
+        "currency": "USD",
+        "stockNumber": "91420"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/33230/1409936/33230_1409936_60617F.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/33230/1409936/33230_1409936_60B137.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/33230/1409936/33230_1409936_DC0437.webp", "caption": "Walkaround photo" },
+        { "slot": "engine_compartment", "url": "https://img.agdealer.com/clients/33230/1409936/33230_1409936_47C216.webp", "caption": "Engine evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1350422",
+      "sourceName": "AgDealer",
+      "dealer": "Yurke Sales & Service Ltd.",
+      "sourceUrl": "https://www.agdealer.com/detail/1350422/1995-gleaner-r62",
+      "listingId": "1350422",
+      "machine": {
+        "unitType": "combine",
+        "make": "Gleaner",
+        "model": "R62",
+        "modelYear": 1995,
+        "serialOrPin": null,
+        "engineHours": 4196,
+        "separatorHours": 2945,
+        "location": "Comber, Ontario",
+        "attachmentsOrOptions": "4WD, Cummins engine, 30.5-32 / 14.9-26 tires, new hydrostat."
+      },
+      "listingFacts": {
+        "askingPrice": 25000,
+        "askingPriceUsd": 18278,
+        "currency": "CAD"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/210/1350422/210_1350422_203509.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/210/1350422/210_1350422_C2DB1D.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/210/1350422/210_1350422_21A6B4.webp", "caption": "Walkaround photo" },
+        { "slot": "damage_leaks_welds", "url": "https://img.agdealer.com/clients/210/1350422/210_1350422_D66777.webp", "caption": "Damage/leak/weld evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1410032",
+      "sourceName": "AgDealer",
+      "dealer": "Southpoint Equipment",
+      "sourceUrl": "https://www.agdealer.com/detail/1410032/1993-gleaner-r62",
+      "listingId": "1410032",
+      "machine": {
+        "unitType": "combine",
+        "make": "Gleaner",
+        "model": "R62",
+        "modelYear": 1993,
+        "serialOrPin": null,
+        "engineHours": 4196,
+        "separatorHours": 2789,
+        "location": "Chatham, Ontario",
+        "attachmentsOrOptions": "Includes 800-25 flex with wagon, Cummins, 2WD, good shape per public listing."
+      },
+      "listingFacts": {
+        "askingPrice": 37900,
+        "askingPriceUsd": 27644,
+        "currency": "CAD",
+        "stockNumber": "Z10198"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/12/1410032/12_1410032_E23B3A.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/12/1410032/12_1410032_33AA67.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/12/1410032/12_1410032_E57680.webp", "caption": "Walkaround photo" },
+        { "slot": "front_tires_tracks", "url": "https://img.agdealer.com/clients/12/1410032/12_1410032_DE6840.webp", "caption": "Tire evidence" }
+      ]
+    },
+    {
+      "id": "agdealer-1335820",
+      "sourceName": "AgDealer",
+      "dealer": "Equipment Ontario Ltd.",
+      "sourceUrl": "https://www.agdealer.com/detail/1335820/2023-case-ih-8250",
+      "listingId": "1335820",
+      "machine": {
+        "unitType": "combine",
+        "make": "Case IH",
+        "model": "8250",
+        "modelYear": 2023,
+        "serialOrPin": null,
+        "engineHours": 885,
+        "separatorHours": 647,
+        "location": "Elmira, Ontario",
+        "attachmentsOrOptions": "Harvest Command, 4WD, Luxury Cab, leather seats, fine chopper, folding bin cover, guidance, extended wear rotor/cone, LED lighting, cameras."
+      },
+      "listingFacts": {
+        "askingPrice": 672880,
+        "askingPriceUsd": 494583,
+        "currency": "CAD",
+        "stockNumber": "T03353"
+      },
+      "photos": [
+        { "slot": "front_45", "url": "https://img.agdealer.com/clients/33163/1335820/33163_1335820_F56A3A.webp", "caption": "Primary listing photo" },
+        { "slot": "left_side", "url": "https://img.agdealer.com/clients/33163/1335820/33163_1335820_F7EF08.webp", "caption": "Walkaround photo" },
+        { "slot": "right_side", "url": "https://img.agdealer.com/clients/33163/1335820/33163_1335820_218E0E.webp", "caption": "Walkaround photo" },
+        { "slot": "cab_display_hours", "url": "https://img.agdealer.com/clients/33163/1335820/33163_1335820_E18864.webp", "caption": "Cab evidence" },
+        { "slot": "engine_compartment", "url": "https://img.agdealer.com/clients/33163/1335820/33163_1335820_5E114F.webp", "caption": "Engine evidence" }
+      ]
+    }
+  ]
+}

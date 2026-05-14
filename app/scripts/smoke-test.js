@@ -74,6 +74,7 @@ const evidenceId = batch.items[0].id;
 const analysis = await request(`/trade-cases/${tradeCase.id}/evidence/${evidenceId}/analyze`, {
   method: 'POST',
   body: JSON.stringify({
+    processingMode: 'sync',
     analysisMode: 'field_evidence_quality',
     checklistSlot: 'front_45'
   })

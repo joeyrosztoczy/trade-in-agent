@@ -37,7 +37,10 @@ export async function generateDemoValuation({ tradeCase = {}, checklist = {}, fi
 
 function buildValuationContext({ tradeCase, checklist, findings, routing }) {
   const machine = tradeCase.machine || {};
-  const comparableSales = selectComparableSet(machine);
+  const comparableSales = mergeComparableSets([
+    comparableFromEvidenceSource(tradeCase, machine),
+    ...selectComparableSet(machine)
+  ]);
   return {
     tradeCaseId: tradeCase.id || null,
     caseNumber: tradeCase.caseNumber || null,
@@ -55,6 +58,45 @@ function buildValuationContext({ tradeCase, checklist, findings, routing }) {
     fallbackComparableSales: comparableSales,
     comparableBasis: demoCompData
   };
+}
+
+function comparableFromEvidenceSource(tradeCase = {}, machine = {}) {
+  for (const evidence of tradeCase.evidenceItems || []) {
+    const metadata = evidence.metadata || {};
+    const facts = metadata.listingFacts || {};
+    const sourceUrl = metadata.sourceUrl || metadata.listingUrl;
+    const sourcePrice = numberOrNull(facts.askingPriceUsd ?? facts.askingPrice);
+    if (!sourceUrl || sourcePrice == null) continue;
+    return {
+      id: metadata.exampleId || metadata.listingId || sourceUrl,
+      source: metadata.sourceName || metadata.sourceLabel || 'Field source listing',
+      sourceUrl,
+      dealer: metadata.dealer || metadata.sourceDealer || null,
+      location: machine.location || metadata.sourceLocation || null,
+      make: machine.make,
+      model: machine.model,
+      modelYear: machine.modelYear,
+      unitType: machine.unitType || 'combine',
+      currency: facts.askingPriceUsd ? 'USD' : facts.currency || 'USD',
+      askingPrice: sourcePrice,
+      engineHours: machine.engineHours,
+      separatorHours: machine.separatorHours,
+      status: facts.status || null,
+      capturedAt: metadata.capturedAt || null,
+      summary: metadata.caption || metadata.notes || 'Comparable derived from the source listing used for this QA trade case.'
+    };
+  }
+  return null;
+}
+
+function mergeComparableSets(items = []) {
+  const seen = new Set();
+  return items.filter(Boolean).filter(item => {
+    const key = item.sourceUrl || item.id;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 5);
 }
 
 function selectComparableSet(machine = {}) {

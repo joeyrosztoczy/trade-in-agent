@@ -9,7 +9,9 @@ import {
   buildReviewerBrief,
   describeChecklistSlots,
   evidenceRequestsForSlots,
-  packetToMarkdown
+  packetToMarkdown,
+  reviewStatusLabel,
+  routeLabel
 } from './presentation.js';
 
 const DEFAULT_ANALYSIS_JOB_TYPE = 'field_evidence_quality';
@@ -125,6 +127,82 @@ export async function listTradeCases({ includeArchived = false } = {}) {
     const machine = row.machine ? rowToMachine(row.machine) : null;
     return toTradeCase(row, machine);
   });
+}
+
+export async function listReviewCases({ includeArchived = false, limit = 100 } = {}) {
+  const result = await query(
+    `SELECT tc.*, row_to_json(m.*) AS machine
+     FROM trade_cases tc
+     LEFT JOIN machines m ON m.trade_case_id = tc.id
+     WHERE ($1::boolean OR tc.archived_at IS NULL)
+     ORDER BY tc.review_updated_at DESC NULLS LAST, tc.updated_at DESC, tc.created_at DESC
+     LIMIT $2`,
+    [includeArchived, Math.max(1, Math.min(Number(limit) || 100, 250))]
+  );
+
+  const items = [];
+  for (const row of result.rows) {
+    items.push(await buildReviewCase(row, { detail: false }));
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: buildReviewQueueSummary(items),
+    items
+  };
+}
+
+export async function getReviewCase(id) {
+  const result = await query(
+    `SELECT tc.*, row_to_json(m.*) AS machine
+     FROM trade_cases tc
+     LEFT JOIN machines m ON m.trade_case_id = tc.id
+     WHERE tc.id = $1`,
+    [id]
+  );
+  if (!result.rows.length) return null;
+  return buildReviewCase(result.rows[0], { detail: true });
+}
+
+export async function recordReviewAction(id, input = {}) {
+  const actionType = input.actionType || input.action_type || 'note';
+  const reviewer = input.reviewer || input.reviewedBy || input.reviewed_by || 'local-reviewer';
+  const note = input.note || input.notes || null;
+  const nextReviewStatus = input.reviewStatus || input.review_status || reviewStatusForAction(actionType);
+  const nextRoute = input.route || routeForAction(actionType);
+  const packetId = input.packetId || input.packet_id || null;
+  const payload = input.payload || input.metadata || {};
+
+  const inserted = await withTransaction(async client => {
+    const exists = await client.query('SELECT * FROM trade_cases WHERE id = $1', [id]);
+    if (!exists.rows.length) return null;
+
+    const action = await client.query(
+      `INSERT INTO review_actions (
+        trade_case_id, reviewer, action_type, note, review_status, route, packet_id, payload_json
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [id, reviewer, actionType, note, nextReviewStatus, nextRoute, packetId, payload]
+    );
+
+    await client.query(
+      `UPDATE trade_cases
+       SET review_status = COALESCE($2, review_status),
+           route = COALESCE($3, route),
+           review_notes = COALESCE($4, review_notes),
+           assigned_reviewer = COALESCE($5, assigned_reviewer),
+           review_updated_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id, nextReviewStatus, nextRoute, note, reviewer]
+    );
+
+    return action.rows[0];
+  });
+
+  if (!inserted) return null;
+  return getReviewCase(id);
 }
 
 export async function getTradeCase(id) {
@@ -680,7 +758,10 @@ export async function processEvidenceAnalysisJob(job) {
     ...(job.payload || {}),
     analysisMode: job.payload?.analysisMode || job.payload?.analysis_mode || job.jobType || DEFAULT_ANALYSIS_JOB_TYPE
   });
-  return analyzeEvidence(job.tradeCaseId, job.evidenceItemId, payload);
+  return analyzeEvidence(job.tradeCaseId, job.evidenceItemId, {
+    ...payload,
+    processingMode: 'sync'
+  });
 }
 
 export async function completeAnalysisJob(jobId, result = {}) {
@@ -981,6 +1062,431 @@ export async function generatePacket(id) {
   };
 }
 
+async function buildReviewCase(row, { detail = false } = {}) {
+  const machine = row.machine ? rowToMachine(row.machine) : null;
+  const tradeCase = toTradeCase(row, machine, await listEvidence(row.id));
+  const checklist = await getChecklistStatus(row.id);
+  const findings = await listFindings(row.id);
+  const processingSummary = await getProcessingSummary(row.id);
+  const latestPacket = await getLatestPacket(row.id);
+  const latestAction = detail ? null : await getLatestReviewAction(row.id);
+  const source = inferReviewSource(tradeCase);
+  const valuation = reviewValuation(latestPacket?.packet);
+  const recon = reviewRecon(latestPacket?.packet);
+  const risk = reviewRisk({ tradeCase, checklist, findings, processingSummary });
+  const evidence = reviewEvidenceTiles({ tradeCase, checklist });
+  const riskFactors = reviewRiskFactors({ tradeCase, checklist, findings, risk, valuation, recon });
+  const reviewLines = reviewReadoutLines({ tradeCase, checklist, processingSummary, valuation, recon, latestPacket });
+
+  return {
+    id: tradeCase.id,
+    caseNumber: tradeCase.caseNumber,
+    createdAt: tradeCase.createdAt,
+    updatedAt: tradeCase.updatedAt,
+    unit: [machine?.make, machine?.model].filter(Boolean).join(' ') || 'Unknown combine',
+    modelYear: machine?.modelYear || null,
+    type: humanizeToken(machine?.unitType || 'combine'),
+    serial: machine?.serialOrPin || 'Unconfirmed',
+    hours: formatHours(machine),
+    customer: source.dealer || source.label || tradeCase.createdBy,
+    location: machine?.location || source.location || 'Location TBD',
+    stage: reviewStatusLabel(tradeCase.reviewStatus || 'field_collection'),
+    route: routeLabel(tradeCase.route || 'draft'),
+    routeKey: tradeCase.route,
+    age: ageLabel(tradeCase.createdAt),
+    risk: risk.level,
+    riskScore: risk.score,
+    reviewStatus: tradeCase.reviewStatus,
+    reviewStatusLabel: reviewStatusLabel(tradeCase.reviewStatus),
+    confidence: confidenceLabel(tradeCase.confidence),
+    proposedTrade: valuation.midpoint,
+    lowValue: valuation.low,
+    highValue: valuation.high,
+    reconBudget: recon.midpoint,
+    reconLow: recon.low,
+    reconHigh: recon.high,
+    specs: reviewSpecs(machine, latestPacket?.packet),
+    riskFactors,
+    evidence,
+    reviewLines,
+    summary: reviewSummary({ tradeCase, checklist, findings, latestPacket, valuation, recon }),
+    source,
+    sourceUrl: source.url,
+    listingFacts: source.listingFacts || {},
+    packet: latestPacket ? {
+      id: latestPacket.id,
+      createdAt: latestPacket.createdAt,
+      preview: markdownPreview(latestPacket.markdown),
+      markdown: detail ? latestPacket.markdown : undefined,
+      recommendation: latestPacket.packet?.recommendation || null,
+      demoValuation: latestPacket.packet?.demoValuation || null
+    } : null,
+    processingSummary,
+    checklist,
+    latestAction: latestAction ? rowToReviewAction(latestAction) : null,
+    evidenceItems: detail ? tradeCase.evidenceItems : undefined,
+    findings: detail ? findings : undefined,
+    actions: detail ? await listReviewActions(row.id) : undefined
+  };
+}
+
+async function getLatestPacket(tradeCaseId) {
+  const result = await query(
+    `SELECT *
+     FROM packets
+     WHERE trade_case_id = $1
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    [tradeCaseId]
+  );
+  return result.rows[0] ? rowToPacket(result.rows[0]) : null;
+}
+
+async function getLatestReviewAction(tradeCaseId) {
+  const result = await query(
+    `SELECT *
+     FROM review_actions
+     WHERE trade_case_id = $1
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    [tradeCaseId]
+  );
+  return result.rows[0] || null;
+}
+
+async function listReviewActions(tradeCaseId) {
+  const result = await query(
+    `SELECT *
+     FROM review_actions
+     WHERE trade_case_id = $1
+     ORDER BY created_at DESC, id DESC`,
+    [tradeCaseId]
+  );
+  return result.rows.map(rowToReviewAction);
+}
+
+function buildReviewQueueSummary(items = []) {
+  const open = items.filter(item => !['approved', 'reviewed'].includes(item.reviewStatus)).length;
+  const ready = items.filter(item => ['ready_for_fast_review', 'ready_for_standard_review'].includes(item.reviewStatus)).length;
+  const collection = items.filter(item => item.reviewStatus === 'field_collection').length;
+  const technician = items.filter(item => item.reviewStatus === 'technician_inspection_required').length;
+  const avgRisk = items.length
+    ? Math.round(items.reduce((sum, item) => sum + Number(item.riskScore || 0), 0) / items.length)
+    : 0;
+  const pipeline = items.reduce((sum, item) => sum + Number(item.proposedTrade || 0), 0);
+
+  return {
+    lastSync: new Date().toISOString(),
+    locationsOnline: `${new Set(items.map(item => item.location).filter(Boolean)).size} sources`,
+    slaBreaches: String(items.filter(item => ageInDays(item.createdAt) >= 5).length),
+    kpis: [
+      { label: 'Open Reviews', value: String(open), delta: `${ready} ready`, tone: ready ? 'good' : 'watch' },
+      { label: 'Field Evidence', value: String(collection), delta: 'needs more', tone: collection ? 'watch' : 'good' },
+      { label: 'Pipeline Value', value: formatCompactMoney(pipeline), delta: 'demo posture', tone: pipeline ? 'good' : 'watch' },
+      { label: 'Avg Risk Score', value: String(avgRisk), suffix: '/100', delta: `${technician} tech holds`, tone: technician ? 'risk' : avgRisk >= 55 ? 'watch' : 'good' }
+    ],
+    openReviews: open,
+    readyForReview: ready,
+    fieldCollection: collection,
+    technicianEscalations: technician,
+    avgRiskScore: avgRisk,
+    pipelineValue: pipeline
+  };
+}
+
+function inferReviewSource(tradeCase) {
+  const evidenceItems = tradeCase.evidenceItems || [];
+  for (const evidence of evidenceItems) {
+    const metadata = evidence.metadata || {};
+    if (metadata.sourceUrl || metadata.listingUrl || metadata.dealer || metadata.sourceLabel) {
+      return {
+        url: metadata.sourceUrl || metadata.listingUrl || null,
+        label: metadata.sourceLabel || metadata.sourceName || null,
+        dealer: metadata.dealer || metadata.sourceDealer || null,
+        location: metadata.sourceLocation || null,
+        listingFacts: metadata.listingFacts || {}
+      };
+    }
+  }
+  return { url: null, label: null, dealer: null, location: null, listingFacts: {} };
+}
+
+function reviewValuation(packet = {}) {
+  const range = packet?.demoValuation?.valuation?.estimatedTradeValueRange
+    || packet?.recommendation?.preliminaryTradeValue
+    || {};
+  const low = numberOrNull(range.low);
+  const high = numberOrNull(range.high);
+  return {
+    low,
+    high,
+    midpoint: midpoint(low, high)
+  };
+}
+
+function reviewRecon(packet = {}) {
+  const range = packet?.demoValuation?.reconBudget?.estimatedRange
+    || packet?.recommendation?.demoReconBudget
+    || {};
+  const low = numberOrNull(range.low);
+  const high = numberOrNull(range.high);
+  return {
+    low,
+    high,
+    midpoint: midpoint(low, high)
+  };
+}
+
+function reviewRisk({ tradeCase, checklist = {}, findings = [], processingSummary = {} }) {
+  const riskFlags = tradeCase.riskFlags || [];
+  const severe = findings.filter(finding => finding.severity === 'severe').length + riskFlags.filter(flag => flag.severity === 'severe').length;
+  const concern = findings.filter(finding => finding.severity === 'concern').length + riskFlags.filter(flag => flag.severity === 'concern').length;
+  const missing = Number(checklist.missingCount || 0);
+  const retake = Number(checklist.retakeCount || 0);
+  const weak = Number(checklist.weakCount || 0);
+  const incomplete = Number(processingSummary.incomplete || 0);
+  const confidence = Number(tradeCase.confidence || 0);
+  let score = 18 + missing * 5 + retake * 8 + weak * 5 + concern * 14 + severe * 28 + incomplete * 3;
+  if (tradeCase.route === 'technician_inspection_required') score += 28;
+  if (tradeCase.route === 'fast_path_candidate') score -= 12;
+  if (confidence) score += Math.round((1 - confidence) * 18);
+  score = Math.max(0, Math.min(100, score));
+  return {
+    score,
+    level: score >= 70 || severe || tradeCase.route === 'technician_inspection_required'
+      ? 'high'
+      : score >= 40 || concern || missing || retake || weak
+        ? 'medium'
+        : 'low'
+  };
+}
+
+function reviewEvidenceTiles({ tradeCase, checklist = {} }) {
+  const bySlot = new Map((tradeCase.evidenceItems || []).map(item => [item.checklistSlot, item]));
+  const priority = [
+    ...((checklist.items || []).filter(item => item.requiredForBaseline && item.status !== 'missing')),
+    ...((checklist.items || []).filter(item => item.requiredForBaseline && item.status === 'missing'))
+  ];
+
+  return priority.slice(0, 8).map(item => {
+    const evidence = bySlot.get(item.slot);
+    return {
+      label: describeReviewSlot(item.description || item.slot),
+      status: normalizeReviewEvidenceStatus(item.status, evidence),
+      meta: evidenceMetaLabel(item, evidence),
+      checklistSlot: item.slot,
+      evidenceItemId: evidence?.id || item.evidenceItemId || null
+    };
+  });
+}
+
+function reviewRiskFactors({ tradeCase, checklist = {}, findings = [], risk, valuation, recon }) {
+  const acceptedRatio = Number(checklist.requiredCount || 0)
+    ? Math.round((Number(checklist.acceptedCount || 0) / Number(checklist.requiredCount || 1)) * 100)
+    : 0;
+  const conditionScore = Math.min(100, findings.reduce((score, finding) => {
+    if (finding.findingType !== 'condition') return score;
+    if (finding.severity === 'severe') return score + 35;
+    if (finding.severity === 'concern') return score + 22;
+    if (finding.severity === 'watch') return score + 12;
+    return score + 4;
+  }, 0));
+  const reconScore = recon.high ? Math.min(100, Math.round(Number(recon.high) / 1200)) : risk.score;
+  const marketScore = valuation.low && valuation.high ? 35 : 68;
+
+  return [
+    ['Evidence gap', Math.max(0, 100 - acceptedRatio), toneForScore(100 - acceptedRatio)],
+    ['Visible condition', conditionScore, toneForScore(conditionScore)],
+    ['Recon uncertainty', reconScore, toneForScore(reconScore)],
+    ['Market support', marketScore, toneForScore(marketScore)]
+  ];
+}
+
+function reviewReadoutLines({ tradeCase, checklist = {}, processingSummary = {}, valuation, recon, latestPacket }) {
+  return [
+    {
+      label: 'Field evidence',
+      value: `${checklist.acceptedCount || 0} accepted / ${checklist.retakeCount || 0} retakes / ${checklist.missingCount || 0} missing`,
+      tone: checklist.missingCount || checklist.retakeCount ? 'watch' : 'good'
+    },
+    {
+      label: 'Async processing',
+      value: `${processingSummary.done || 0} done / ${processingSummary.incomplete || 0} active`,
+      tone: processingSummary.incomplete ? 'watch' : 'good'
+    },
+    {
+      label: 'Recon posture',
+      value: recon.low || recon.high ? `${formatMoneyRange(recon.low, recon.high)} demo` : 'No demo recon yet',
+      tone: recon.high && recon.high >= 70000 ? 'risk' : recon.high ? 'watch' : 'info'
+    },
+    {
+      label: 'Next decision',
+      value: nextReviewDecision(tradeCase, latestPacket),
+      tone: tradeCase.route === 'technician_inspection_required' ? 'risk' : tradeCase.route === 'needs_more_evidence' ? 'watch' : 'good'
+    }
+  ];
+}
+
+function reviewSpecs(machine = {}, packet = {}) {
+  const specs = [
+    ['Engine hours', machine?.engineHours == null ? 'Unconfirmed' : `${Number(machine.engineHours).toLocaleString()} hrs`],
+    ['Separator hours', machine?.separatorHours == null ? 'Unconfirmed' : `${Number(machine.separatorHours).toLocaleString()} hrs`],
+    ['Location', machine?.location || 'TBD'],
+    ['Source', packet?.demoValuation?.researchMode || 'field evidence']
+  ];
+  if (machine?.attachmentsOrOptions) specs.push(['Options', machine.attachmentsOrOptions]);
+  return specs.slice(0, 5);
+}
+
+function reviewSummary({ tradeCase, checklist = {}, findings = [], latestPacket, valuation, recon }) {
+  const finding = findings.find(item => item.findingType === 'condition' && item.severity && item.severity !== 'info');
+  const packetText = latestPacket?.packet?.reviewerBrief?.summary || latestPacket?.packet?.recommendation?.reason;
+  const valueText = valuation.low || recon.low
+    ? ` Demo posture: trade ${formatMoneyRange(valuation.low, valuation.high)}, recon ${formatMoneyRange(recon.low, recon.high)}.`
+    : '';
+  const evidenceText = checklist.complete
+    ? 'Baseline evidence is complete for centralized review.'
+    : `Baseline evidence still needs ${checklist.missingCount || 0} missing and ${checklist.retakeCount || 0} retake slot(s).`;
+  const findingText = finding ? ` Highest visible concern: ${finding.finding}` : ' No major visible concern has been recorded by the current evidence analysis.';
+  return `${packetText || evidenceText}${valueText}${findingText}`.trim();
+}
+
+function reviewStatusForAction(actionType) {
+  const map = {
+    approve_packet: 'approved',
+    mark_reviewed: 'reviewed',
+    request_more_evidence: 'field_collection',
+    hold_for_technician: 'technician_inspection_required',
+    assign_reviewer: null,
+    note: null
+  };
+  return Object.prototype.hasOwnProperty.call(map, actionType) ? map[actionType] : null;
+}
+
+function routeForAction(actionType) {
+  if (actionType === 'request_more_evidence') return 'needs_more_evidence';
+  if (actionType === 'hold_for_technician') return 'technician_inspection_required';
+  return null;
+}
+
+function formatHours(machine = {}) {
+  const engine = numberOrNull(machine?.engineHours);
+  const separator = numberOrNull(machine?.separatorHours);
+  if (engine != null && separator != null) return `${Math.round(engine).toLocaleString()} eng / ${Math.round(separator).toLocaleString()} sep`;
+  if (engine != null) return `${Math.round(engine).toLocaleString()} eng`;
+  if (separator != null) return `${Math.round(separator).toLocaleString()} sep`;
+  return 'Unconfirmed';
+}
+
+function ageLabel(dateLike) {
+  const days = ageInDays(dateLike);
+  if (days <= 0) return 'today';
+  if (days === 1) return '1d';
+  return `${days}d`;
+}
+
+function ageInDays(dateLike) {
+  const timestamp = new Date(dateLike || Date.now()).getTime();
+  if (!Number.isFinite(timestamp)) return 0;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 86400000));
+}
+
+function confidenceLabel(value) {
+  const confidence = Number(value || 0);
+  if (confidence >= 0.78) return 'High';
+  if (confidence >= 0.55) return 'Medium';
+  if (confidence > 0) return 'Low';
+  return 'Pending';
+}
+
+function midpoint(low, high) {
+  if (low == null && high == null) return null;
+  if (low == null) return high;
+  if (high == null) return low;
+  return Math.round((Number(low) + Number(high)) / 2);
+}
+
+function describeReviewSlot(value) {
+  return String(value || 'Evidence')
+    .replace(/\s*\/\s*/g, ' / ')
+    .replace(/\bwith\b.*$/i, match => match.length > 24 ? '' : match)
+    .trim()
+    .slice(0, 36);
+}
+
+function normalizeReviewEvidenceStatus(status, evidence) {
+  if (evidence?.qualityStatus === 'accepted' || evidence?.qualityStatus === 'usable') return 'accepted';
+  if (evidence?.qualityStatus === 'needs_retake' || status === 'needs_retake') return 'retake';
+  if (evidence?.qualityStatus === 'weak' || status === 'weak') return 'weak';
+  if (evidence?.qualityStatus === 'rejected') return 'rejected';
+  if (status === 'complete') return 'accepted';
+  if (status === 'missing') return 'missing';
+  return status || 'pending';
+}
+
+function evidenceMetaLabel(item = {}, evidence = null) {
+  if (!evidence) return item.requiredForBaseline ? 'Needed' : 'Optional';
+  if (evidence.analysisStatus === 'queued') return 'Queued';
+  if (evidence.analysisStatus === 'processing') return 'Processing';
+  if (evidence.qualityStatus === 'needs_retake') return 'Retake requested';
+  if (evidence.qualityStatus === 'weak') return 'Weak evidence';
+  if (evidence.qualityStatus === 'accepted' || evidence.qualityStatus === 'usable') return 'Accepted';
+  return humanizeToken(evidence.qualityStatus || evidence.analysisStatus || item.status);
+}
+
+function toneForScore(score) {
+  const number = Number(score || 0);
+  if (number >= 70) return 'high';
+  if (number >= 40) return 'medium';
+  return 'low';
+}
+
+function formatMoneyRange(low, high) {
+  if (low == null && high == null) return 'TBD';
+  if (low != null && high != null && Number(low) !== Number(high)) return `${formatMoney(low)}-${formatMoney(high)}`;
+  return formatMoney(low ?? high);
+}
+
+function formatMoney(value) {
+  if (value == null) return 'TBD';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0
+  }).format(Number(value));
+}
+
+function formatCompactMoney(value) {
+  const number = Number(value || 0);
+  if (Math.abs(number) >= 1000000) return `$${(number / 1000000).toFixed(number >= 10000000 ? 0 : 1)}M`;
+  if (Math.abs(number) >= 1000) return `$${Math.round(number / 1000)}k`;
+  return formatMoney(number);
+}
+
+function nextReviewDecision(tradeCase, latestPacket) {
+  if (tradeCase.route === 'technician_inspection_required') return 'Escalate technician';
+  if (tradeCase.route === 'needs_more_evidence') return 'Request field evidence';
+  if (!latestPacket) return 'Generate packet';
+  if (tradeCase.reviewStatus === 'approved') return 'Approved';
+  return 'Reviewer approval';
+}
+
+function markdownPreview(markdown = '') {
+  return String(markdown || '')
+    .split('\n')
+    .filter(line => line.trim())
+    .slice(0, 10)
+    .join('\n');
+}
+
+function humanizeToken(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
 function rowToMachine(row = {}) {
   if (!row) return null;
   return {
@@ -993,6 +1499,31 @@ function rowToMachine(row = {}) {
     separatorHours: numberOrNull(row.separator_hours),
     location: row.location,
     attachmentsOrOptions: row.attachments_or_options
+  };
+}
+
+function rowToPacket(row = {}) {
+  return {
+    id: row.id,
+    tradeCaseId: row.trade_case_id,
+    createdAt: row.created_at,
+    packet: row.packet_json || {},
+    markdown: row.packet_markdown || ''
+  };
+}
+
+function rowToReviewAction(row = {}) {
+  return {
+    id: row.id,
+    tradeCaseId: row.trade_case_id,
+    createdAt: row.created_at,
+    reviewer: row.reviewer,
+    actionType: row.action_type,
+    note: row.note,
+    reviewStatus: row.review_status,
+    route: row.route,
+    packetId: row.packet_id,
+    payload: row.payload_json || {}
   };
 }
 

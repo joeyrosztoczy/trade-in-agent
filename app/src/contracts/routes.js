@@ -177,6 +177,37 @@ export const endpointContracts = [
     summary: 'Generate a reviewer-facing trade-in packet.',
     responseSchema: 'PacketResponse',
     successStatus: 201
+  },
+  {
+    operationId: 'trade_in_review_queue',
+    stableToolName: 'trade_case_review_queue',
+    legacyToolName: null,
+    method: 'GET',
+    path: '/review/cases',
+    summary: 'List sidecar-backed reviewer queue tickets.',
+    responseSchema: 'ReviewQueueResponse',
+    successStatus: 200
+  },
+  {
+    operationId: 'trade_in_review_case',
+    stableToolName: 'trade_case_review_get',
+    legacyToolName: null,
+    method: 'GET',
+    path: '/review/cases/{tradeCaseId}',
+    summary: 'Get a reviewer queue ticket with evidence, findings, packet, and action history.',
+    responseSchema: 'ReviewCaseDetailResponse',
+    successStatus: 200
+  },
+  {
+    operationId: 'trade_in_review_action',
+    stableToolName: 'trade_case_review_action',
+    legacyToolName: null,
+    method: 'POST',
+    path: '/review/cases/{tradeCaseId}/actions',
+    summary: 'Record a reviewer decision or note for a trade-in case.',
+    requestSchema: 'ReviewActionRequest',
+    responseSchema: 'ReviewActionResponse',
+    successStatus: 201
   }
 ];
 
@@ -192,4 +223,3 @@ export function schemaByName(name) {
 }
 
 export { API_VERSION };
-

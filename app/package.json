@@ -11,6 +11,7 @@
     "smoke": "node scripts/smoke-test.js",
     "smoke:async": "node scripts/async-smoke-test.js",
     "qa:user-flow": "node scripts/user-flow-qa.js",
+    "qa:review-queue": "node scripts/seed-review-queue-e2e.js",
     "worker": "node src/worker.js",
     "contracts:openapi": "node scripts/generate-openapi.js",
     "contracts:check": "node scripts/check-openapi-current.js",

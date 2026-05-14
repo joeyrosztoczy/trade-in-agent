@@ -330,6 +330,26 @@
   line-height: var(--ti-leading-loose);
 }
 
+.summary-copy a {
+  color: var(--ti-color-brand);
+  font-weight: 700;
+}
+
+.packet-preview {
+  max-height: 14rem;
+  margin-top: var(--ti-space-4);
+  padding: var(--ti-space-3);
+  overflow: auto;
+  border: 1px solid var(--ti-color-line-soft);
+  border-radius: var(--ti-radius-2);
+  background: var(--ti-color-surface-muted);
+  color: var(--ti-color-ink-muted);
+  font-family: var(--ti-font-mono);
+  font-size: var(--ti-text-xs);
+  line-height: var(--ti-leading-loose);
+  white-space: pre-wrap;
+}
+
 .review-footnote {
   display: flex;
   align-items: center;

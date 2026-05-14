@@ -2,6 +2,8 @@
 
 For live Stotz corporate sales deployment and Microsoft Teams phone QA, use [docs/stotz-corp-sales-deployment-runbook.md](stotz-corp-sales-deployment-runbook.md).
 
+For the sidecar-backed M6 review queue and 12 public combine fixture flow, use [docs/qa/review-queue-e2e.md](qa/review-queue-e2e.md).
+
 ## Phase One Sidecar QA
 
 These steps verify the Phase One local foundations without requiring a UI.

@@ -24,6 +24,11 @@ const COMPONENT_SCHEMA_NAMES = [
   'GuidanceResponse',
   'RoutingResponse',
   'PacketResponse',
+  'ReviewQueueCase',
+  'ReviewQueueResponse',
+  'ReviewCaseDetailResponse',
+  'ReviewActionRequest',
+  'ReviewActionResponse',
   'ArchiveResponse'
 ];
 
@@ -201,15 +206,31 @@ function queryParameters(endpoint) {
       }
     ];
   }
+  if (endpoint.path === '/review/cases' && endpoint.method === 'GET') {
+    return [
+      {
+        name: 'includeArchived',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' }
+      },
+      {
+        name: 'limit',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', minimum: 1, maximum: 250 }
+      }
+    ];
+  }
   return [];
 }
 
 function tagForPath(path) {
   if (path === '/health') return 'health';
+  if (path.startsWith('/review/')) return 'review';
   if (path.includes('/evidence')) return 'evidence';
   if (path.includes('/checklist') || path.includes('/guidance') || path.includes('/routing') || path.includes('/packet')) {
     return 'review';
   }
   return 'trade-cases';
 }
-

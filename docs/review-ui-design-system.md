@@ -59,9 +59,21 @@ The scaffold keeps that direction, but separates the reusable system from the de
 - `review-ui/src/styles/components.css` - reusable primitives
 - `review-ui/src/styles/demo.css` - disposable demo layout
 - `review-ui/src/demo-data.js` - view-model-shaped mock data
-- `review-ui/src/demo.js` - vanilla renderer for the demo
+- `review-ui/src/demo.js` - vanilla renderer with sidecar-first data loading and static fallback
 - `review-ui/scripts/smoke.mjs` - static scaffold smoke check
 - `review-ui/index.html` - local preview shell
+
+## Implemented Live Review Queue Slice
+
+The current M6 demo now reads live sidecar review data before falling back to static mock data:
+
+- `GET /review/cases` returns queue summaries, source URLs, evidence status, risk/route state, demo valuation/recon posture, packet preview state, and latest review action.
+- `GET /review/cases/:id` returns the detailed ticket view model used by the right-side reviewer panel.
+- `POST /review/cases/:id/actions` persists reviewer decisions to `review_actions`.
+- `app/data/online-combine-examples.json` provides a 12-listing public combine dataset for repeatable end-to-end QA.
+- `npm run qa:review-queue` seeds those examples, runs async evidence processing, generates packets, and produces review tickets.
+
+See [docs/qa/review-queue-e2e.md](qa/review-queue-e2e.md) for the latest source list, QA command path, and known gaps.
 
 ## Component Primitives
 

@@ -1200,6 +1200,215 @@
         "x-stable-tool-name": "trade_case_packet",
         "x-legacy-tool-name": "trade_in_generate_packet"
       }
+    },
+    "/review/cases": {
+      "get": {
+        "operationId": "trade_in_review_queue",
+        "summary": "List sidecar-backed reviewer queue tickets.",
+        "tags": [
+          "review"
+        ],
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 250
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contract validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sidecar error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-api-version": "trade-in-sidecar/v1",
+        "x-stable-tool-name": "trade_case_review_queue"
+      }
+    },
+    "/review/cases/{tradeCaseId}": {
+      "get": {
+        "operationId": "trade_in_review_case",
+        "summary": "Get a reviewer queue ticket with evidence, findings, packet, and action history.",
+        "tags": [
+          "review"
+        ],
+        "parameters": [
+          {
+            "name": "tradeCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCaseDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contract validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sidecar error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-api-version": "trade-in-sidecar/v1",
+        "x-stable-tool-name": "trade_case_review_get"
+      }
+    },
+    "/review/cases/{tradeCaseId}/actions": {
+      "post": {
+        "operationId": "trade_in_review_action",
+        "summary": "Record a reviewer decision or note for a trade-in case.",
+        "tags": [
+          "review"
+        ],
+        "parameters": [
+          {
+            "name": "tradeCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contract validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sidecar error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-api-version": "trade-in-sidecar/v1",
+        "x-stable-tool-name": "trade_case_review_action",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewActionRequest"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8970,6 +9179,3611 @@
         ],
         "additionalProperties": {}
       },
+      "ReviewQueueCase": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "caseNumber": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "modelYear": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "routeKey": {
+            "type": "string"
+          },
+          "age": {
+            "type": "string"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "riskScore": {
+            "type": "number"
+          },
+          "reviewStatus": {
+            "type": "string"
+          },
+          "reviewStatusLabel": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "proposedTrade": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowValue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "highValue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconBudget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconLow": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconHigh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "specs": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {}
+              ]
+            }
+          },
+          "riskFactors": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {}
+          },
+          "reviewLines": {
+            "type": "array",
+            "items": {}
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source": {},
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listingFacts": {},
+          "packet": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "processingSummary": {},
+          "checklist": {
+            "type": "object",
+            "properties": {
+              "unitType": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "combine",
+                      "high_hp_tractor"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "requiredCount": {
+                "type": "number"
+              },
+              "completeCount": {
+                "type": "number"
+              },
+              "acceptedCount": {
+                "type": "number"
+              },
+              "weakCount": {
+                "type": "number"
+              },
+              "retakeCount": {
+                "type": "number"
+              },
+              "duplicateCount": {
+                "type": "number"
+              },
+              "rejectedCount": {
+                "type": "number"
+              },
+              "missingCount": {
+                "type": "number"
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "acceptedSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "weakSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "retakeSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "duplicateSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missingSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nextRecommendedSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "slot": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "requiredForBaseline": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "qualityStatus": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "accepted",
+                                "weak",
+                                "needs_retake",
+                                "duplicate",
+                                "rejected"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "analysisStatus": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "queued",
+                                "processing",
+                                "complete",
+                                "unsupported",
+                                "failed",
+                                "error"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "slot",
+                    "description",
+                    "requiredForBaseline",
+                    "status"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "visibleConditionFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "evidenceQualityFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "uncertaintyFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": [
+              "unitType",
+              "requiredCount",
+              "completeCount",
+              "acceptedCount",
+              "weakCount",
+              "retakeCount",
+              "duplicateCount",
+              "rejectedCount",
+              "missingCount",
+              "complete",
+              "acceptedSlots",
+              "weakSlots",
+              "retakeSlots",
+              "duplicateSlots",
+              "missingSlots",
+              "nextRecommendedSlots",
+              "items"
+            ],
+            "additionalProperties": {}
+          },
+          "latestAction": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "caseNumber",
+          "unit",
+          "type",
+          "serial",
+          "hours",
+          "customer",
+          "location",
+          "stage",
+          "route",
+          "age",
+          "risk",
+          "riskScore",
+          "confidence",
+          "specs",
+          "riskFactors",
+          "evidence",
+          "reviewLines",
+          "summary"
+        ],
+        "additionalProperties": {}
+      },
+      "ReviewQueueResponse": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string"
+          },
+          "summary": {},
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "caseNumber": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "modelYear": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": {
+                  "type": "string"
+                },
+                "serial": {
+                  "type": "string"
+                },
+                "hours": {
+                  "type": "string"
+                },
+                "customer": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                },
+                "route": {
+                  "type": "string"
+                },
+                "routeKey": {
+                  "type": "string"
+                },
+                "age": {
+                  "type": "string"
+                },
+                "risk": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "riskScore": {
+                  "type": "number"
+                },
+                "reviewStatus": {
+                  "type": "string"
+                },
+                "reviewStatusLabel": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "string"
+                },
+                "proposedTrade": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lowValue": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "highValue": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reconBudget": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reconLow": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reconHigh": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "specs": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "string"
+                      },
+                      {}
+                    ]
+                  }
+                },
+                "riskFactors": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {}
+                },
+                "reviewLines": {
+                  "type": "array",
+                  "items": {}
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "source": {},
+                "sourceUrl": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "listingFacts": {},
+                "packet": {
+                  "anyOf": [
+                    {},
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "processingSummary": {},
+                "checklist": {
+                  "type": "object",
+                  "properties": {
+                    "unitType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "combine",
+                            "high_hp_tractor"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "requiredCount": {
+                      "type": "number"
+                    },
+                    "completeCount": {
+                      "type": "number"
+                    },
+                    "acceptedCount": {
+                      "type": "number"
+                    },
+                    "weakCount": {
+                      "type": "number"
+                    },
+                    "retakeCount": {
+                      "type": "number"
+                    },
+                    "duplicateCount": {
+                      "type": "number"
+                    },
+                    "rejectedCount": {
+                      "type": "number"
+                    },
+                    "missingCount": {
+                      "type": "number"
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "acceptedSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "weakSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "retakeSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "duplicateSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "missingSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "nextRecommendedSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slot": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "requiredForBaseline": {
+                            "type": "boolean"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "evidenceItemId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "qualityStatus": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending",
+                                      "accepted",
+                                      "weak",
+                                      "needs_retake",
+                                      "duplicate",
+                                      "rejected"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "analysisStatus": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending",
+                                      "queued",
+                                      "processing",
+                                      "complete",
+                                      "unsupported",
+                                      "failed",
+                                      "error"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "slot",
+                          "description",
+                          "requiredForBaseline",
+                          "status"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "visibleConditionFindings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "tradeCaseId": {
+                            "type": "string"
+                          },
+                          "evidenceItemId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "findingType": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "condition",
+                                  "evidence_quality",
+                                  "uncertainty"
+                                ]
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "section": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "finding": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "info",
+                                      "watch",
+                                      "concern",
+                                      "severe"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "confidence": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "needsFollowUp": {
+                            "type": "boolean"
+                          },
+                          "recommendation": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "evidenceQualityFindings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "tradeCaseId": {
+                            "type": "string"
+                          },
+                          "evidenceItemId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "findingType": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "condition",
+                                  "evidence_quality",
+                                  "uncertainty"
+                                ]
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "section": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "finding": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "info",
+                                      "watch",
+                                      "concern",
+                                      "severe"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "confidence": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "needsFollowUp": {
+                            "type": "boolean"
+                          },
+                          "recommendation": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": {}
+                      }
+                    },
+                    "uncertaintyFindings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "tradeCaseId": {
+                            "type": "string"
+                          },
+                          "evidenceItemId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "findingType": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "condition",
+                                  "evidence_quality",
+                                  "uncertainty"
+                                ]
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "section": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "finding": {
+                            "type": "string"
+                          },
+                          "severity": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "info",
+                                      "watch",
+                                      "concern",
+                                      "severe"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "confidence": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "needsFollowUp": {
+                            "type": "boolean"
+                          },
+                          "recommendation": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "unitType",
+                    "requiredCount",
+                    "completeCount",
+                    "acceptedCount",
+                    "weakCount",
+                    "retakeCount",
+                    "duplicateCount",
+                    "rejectedCount",
+                    "missingCount",
+                    "complete",
+                    "acceptedSlots",
+                    "weakSlots",
+                    "retakeSlots",
+                    "duplicateSlots",
+                    "missingSlots",
+                    "nextRecommendedSlots",
+                    "items"
+                  ],
+                  "additionalProperties": {}
+                },
+                "latestAction": {
+                  "anyOf": [
+                    {},
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "caseNumber",
+                "unit",
+                "type",
+                "serial",
+                "hours",
+                "customer",
+                "location",
+                "stage",
+                "route",
+                "age",
+                "risk",
+                "riskScore",
+                "confidence",
+                "specs",
+                "riskFactors",
+                "evidence",
+                "reviewLines",
+                "summary"
+              ],
+              "additionalProperties": {}
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "summary",
+          "items"
+        ],
+        "additionalProperties": {}
+      },
+      "ReviewCaseDetailResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "caseNumber": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "modelYear": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "routeKey": {
+            "type": "string"
+          },
+          "age": {
+            "type": "string"
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "riskScore": {
+            "type": "number"
+          },
+          "reviewStatus": {
+            "type": "string"
+          },
+          "reviewStatusLabel": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "proposedTrade": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowValue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "highValue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconBudget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconLow": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reconHigh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "specs": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {}
+              ]
+            }
+          },
+          "riskFactors": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {}
+          },
+          "reviewLines": {
+            "type": "array",
+            "items": {}
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source": {},
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listingFacts": {},
+          "packet": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "processingSummary": {},
+          "checklist": {
+            "type": "object",
+            "properties": {
+              "unitType": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "combine",
+                      "high_hp_tractor"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "requiredCount": {
+                "type": "number"
+              },
+              "completeCount": {
+                "type": "number"
+              },
+              "acceptedCount": {
+                "type": "number"
+              },
+              "weakCount": {
+                "type": "number"
+              },
+              "retakeCount": {
+                "type": "number"
+              },
+              "duplicateCount": {
+                "type": "number"
+              },
+              "rejectedCount": {
+                "type": "number"
+              },
+              "missingCount": {
+                "type": "number"
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "acceptedSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "weakSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "retakeSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "duplicateSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missingSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nextRecommendedSlots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "slot": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "requiredForBaseline": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "qualityStatus": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "accepted",
+                                "weak",
+                                "needs_retake",
+                                "duplicate",
+                                "rejected"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "analysisStatus": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "queued",
+                                "processing",
+                                "complete",
+                                "unsupported",
+                                "failed",
+                                "error"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "slot",
+                    "description",
+                    "requiredForBaseline",
+                    "status"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "visibleConditionFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "evidenceQualityFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "uncertaintyFindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": [
+              "unitType",
+              "requiredCount",
+              "completeCount",
+              "acceptedCount",
+              "weakCount",
+              "retakeCount",
+              "duplicateCount",
+              "rejectedCount",
+              "missingCount",
+              "complete",
+              "acceptedSlots",
+              "weakSlots",
+              "retakeSlots",
+              "duplicateSlots",
+              "missingSlots",
+              "nextRecommendedSlots",
+              "items"
+            ],
+            "additionalProperties": {}
+          },
+          "latestAction": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceItems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "tradeCaseId": {
+                  "type": "string"
+                },
+                "uploadedAt": {
+                  "type": "string"
+                },
+                "uploadedBy": {
+                  "type": "string"
+                },
+                "mediaType": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "photo",
+                        "image",
+                        "video",
+                        "document",
+                        "field_note",
+                        "file"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "storageUri": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "checklistSlot": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "qualityStatus": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "weak",
+                        "needs_retake",
+                        "duplicate",
+                        "rejected"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "analysisStatus": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "queued",
+                        "processing",
+                        "complete",
+                        "unsupported",
+                        "failed",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "originalFileName": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "contentType": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sourceMessageId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sourceAttachmentId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "metadata": {},
+                "checklistSlotConfidence": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "notes": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "tradeCaseId",
+                "uploadedBy",
+                "mediaType",
+                "qualityStatus",
+                "analysisStatus"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "tradeCaseId": {
+                  "type": "string"
+                },
+                "evidenceItemId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "findingType": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "condition",
+                        "evidence_quality",
+                        "uncertainty"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "section": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "finding": {
+                  "type": "string"
+                },
+                "severity": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "info",
+                            "watch",
+                            "concern",
+                            "severe"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "needsFollowUp": {
+                  "type": "boolean"
+                },
+                "recommendation": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": {}
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "id",
+          "caseNumber",
+          "unit",
+          "type",
+          "serial",
+          "hours",
+          "customer",
+          "location",
+          "stage",
+          "route",
+          "age",
+          "risk",
+          "riskScore",
+          "confidence",
+          "specs",
+          "riskFactors",
+          "evidence",
+          "reviewLines",
+          "summary"
+        ],
+        "additionalProperties": {}
+      },
+      "ReviewActionRequest": {
+        "type": "object",
+        "properties": {
+          "actionType": {
+            "type": "string"
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "reviewer": {
+            "type": "string"
+          },
+          "reviewedBy": {
+            "type": "string"
+          },
+          "reviewed_by": {
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "review_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "needs_more_evidence",
+                      "fast_path_candidate",
+                      "standard_review",
+                      "escalation_required",
+                      "technician_inspection_required"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packetId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packet_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload": {},
+          "metadata": {}
+        },
+        "additionalProperties": {}
+      },
+      "ReviewActionResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "case": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "caseNumber": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              },
+              "modelYear": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string"
+              },
+              "serial": {
+                "type": "string"
+              },
+              "hours": {
+                "type": "string"
+              },
+              "customer": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "route": {
+                "type": "string"
+              },
+              "routeKey": {
+                "type": "string"
+              },
+              "age": {
+                "type": "string"
+              },
+              "risk": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "riskScore": {
+                "type": "number"
+              },
+              "reviewStatus": {
+                "type": "string"
+              },
+              "reviewStatusLabel": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "string"
+              },
+              "proposedTrade": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lowValue": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "highValue": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reconBudget": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reconLow": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reconHigh": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "specs": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {}
+                  ]
+                }
+              },
+              "riskFactors": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "evidence": {
+                "type": "array",
+                "items": {}
+              },
+              "reviewLines": {
+                "type": "array",
+                "items": {}
+              },
+              "summary": {
+                "type": "string"
+              },
+              "source": {},
+              "sourceUrl": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "listingFacts": {},
+              "packet": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "processingSummary": {},
+              "checklist": {
+                "type": "object",
+                "properties": {
+                  "unitType": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "combine",
+                          "high_hp_tractor"
+                        ]
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "requiredCount": {
+                    "type": "number"
+                  },
+                  "completeCount": {
+                    "type": "number"
+                  },
+                  "acceptedCount": {
+                    "type": "number"
+                  },
+                  "weakCount": {
+                    "type": "number"
+                  },
+                  "retakeCount": {
+                    "type": "number"
+                  },
+                  "duplicateCount": {
+                    "type": "number"
+                  },
+                  "rejectedCount": {
+                    "type": "number"
+                  },
+                  "missingCount": {
+                    "type": "number"
+                  },
+                  "complete": {
+                    "type": "boolean"
+                  },
+                  "acceptedSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "weakSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "retakeSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "duplicateSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "missingSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nextRecommendedSlots": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "slot": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "requiredForBaseline": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "evidenceItemId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "qualityStatus": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "accepted",
+                                    "weak",
+                                    "needs_retake",
+                                    "duplicate",
+                                    "rejected"
+                                  ]
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "analysisStatus": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "queued",
+                                    "processing",
+                                    "complete",
+                                    "unsupported",
+                                    "failed",
+                                    "error"
+                                  ]
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "slot",
+                        "description",
+                        "requiredForBaseline",
+                        "status"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "visibleConditionFindings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "tradeCaseId": {
+                          "type": "string"
+                        },
+                        "evidenceItemId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "findingType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "condition",
+                                "evidence_quality",
+                                "uncertainty"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "section": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "finding": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "info",
+                                    "watch",
+                                    "concern",
+                                    "severe"
+                                  ]
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "confidence": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "needsFollowUp": {
+                          "type": "boolean"
+                        },
+                        "recommendation": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "evidenceQualityFindings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "tradeCaseId": {
+                          "type": "string"
+                        },
+                        "evidenceItemId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "findingType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "condition",
+                                "evidence_quality",
+                                "uncertainty"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "section": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "finding": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "info",
+                                    "watch",
+                                    "concern",
+                                    "severe"
+                                  ]
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "confidence": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "needsFollowUp": {
+                          "type": "boolean"
+                        },
+                        "recommendation": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "uncertaintyFindings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "tradeCaseId": {
+                          "type": "string"
+                        },
+                        "evidenceItemId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "findingType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "condition",
+                                "evidence_quality",
+                                "uncertainty"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "section": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "finding": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "info",
+                                    "watch",
+                                    "concern",
+                                    "severe"
+                                  ]
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "confidence": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "needsFollowUp": {
+                          "type": "boolean"
+                        },
+                        "recommendation": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": {}
+                    }
+                  }
+                },
+                "required": [
+                  "unitType",
+                  "requiredCount",
+                  "completeCount",
+                  "acceptedCount",
+                  "weakCount",
+                  "retakeCount",
+                  "duplicateCount",
+                  "rejectedCount",
+                  "missingCount",
+                  "complete",
+                  "acceptedSlots",
+                  "weakSlots",
+                  "retakeSlots",
+                  "duplicateSlots",
+                  "missingSlots",
+                  "nextRecommendedSlots",
+                  "items"
+                ],
+                "additionalProperties": {}
+              },
+              "latestAction": {
+                "anyOf": [
+                  {},
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidenceItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "uploadedAt": {
+                      "type": "string"
+                    },
+                    "uploadedBy": {
+                      "type": "string"
+                    },
+                    "mediaType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "photo",
+                            "image",
+                            "video",
+                            "document",
+                            "field_note",
+                            "file"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "storageUri": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "checklistSlot": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "qualityStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "weak",
+                            "needs_retake",
+                            "duplicate",
+                            "rejected"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "analysisStatus": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "queued",
+                            "processing",
+                            "complete",
+                            "unsupported",
+                            "failed",
+                            "error"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "originalFileName": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contentType": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sourceMessageId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sourceAttachmentId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "metadata": {},
+                    "checklistSlotConfidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tradeCaseId",
+                    "uploadedBy",
+                    "mediaType",
+                    "qualityStatus",
+                    "analysisStatus"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tradeCaseId": {
+                      "type": "string"
+                    },
+                    "evidenceItemId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "findingType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "condition",
+                            "evidence_quality",
+                            "uncertainty"
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "section": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "finding": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "info",
+                                "watch",
+                                "concern",
+                                "severe"
+                              ]
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "needsFollowUp": {
+                      "type": "boolean"
+                    },
+                    "recommendation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "actions": {
+                "type": "array",
+                "items": {}
+              }
+            },
+            "required": [
+              "id",
+              "caseNumber",
+              "unit",
+              "type",
+              "serial",
+              "hours",
+              "customer",
+              "location",
+              "stage",
+              "route",
+              "age",
+              "risk",
+              "riskScore",
+              "confidence",
+              "specs",
+              "riskFactors",
+              "evidence",
+              "reviewLines",
+              "summary"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "ok",
+          "case"
+        ],
+        "additionalProperties": {}
+      },
       "ArchiveResponse": {
         "type": "object",
         "properties": {
@@ -9010,6 +12824,9 @@
     "trade_case_processing_status",
     "trade_case_guidance",
     "trade_case_routing",
-    "trade_case_packet"
+    "trade_case_packet",
+    "trade_case_review_queue",
+    "trade_case_review_get",
+    "trade_case_review_action"
   ]
 }

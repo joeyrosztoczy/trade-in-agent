@@ -11,10 +11,13 @@ import {
   getActiveTradeCase,
   getChecklistStatus,
   getProcessingStatus,
+  getReviewCase,
   getRoutingStatus,
   getTradeCase,
   healthCheck,
+  listReviewCases,
   listTradeCases,
+  recordReviewAction,
   updateEvidence,
   updateTradeCase
 } from './repository.js';
@@ -23,6 +26,11 @@ import { API_VERSION, ContractSchemas } from './contracts/index.js';
 import { validateRequestBody, validateResponseBody } from './http/validation.js';
 
 const PORT = Number(process.env.PORT || 8788);
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': process.env.CORS_ALLOW_ORIGIN || '*',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization'
+};
 
 function send(res, status, body, headers = {}, responseSchema = null) {
   const responseBody = typeof body === 'string' ? body : validateResponseBody(responseSchema, body);
@@ -30,6 +38,7 @@ function send(res, status, body, headers = {}, responseSchema = null) {
   res.writeHead(status, {
     'Content-Type': typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    ...CORS_HEADERS,
     ...headers
   });
   res.end(payload);
@@ -69,6 +78,10 @@ export function createServer() {
     try {
       const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const parts = routeParts(url);
+
+      if (req.method === 'OPTIONS') {
+        return send(res, 204, '');
+      }
 
       if (req.method === 'GET' && url.pathname === '/health') {
         const health = await healthCheck();
@@ -167,6 +180,26 @@ export function createServer() {
         const packet = await generatePacket(parts[1]);
         if (!packet) return send(res, 404, { error: 'Trade case not found', requestId });
         return send(res, 201, packet, {}, ContractSchemas.PacketResponse);
+      }
+
+      if (parts[0] === 'review' && parts.length === 2 && parts[1] === 'cases' && req.method === 'GET') {
+        const reviewCases = await listReviewCases({
+          includeArchived: url.searchParams.get('includeArchived') === 'true',
+          limit: url.searchParams.get('limit') || 100
+        });
+        return send(res, 200, reviewCases, {}, ContractSchemas.ReviewQueueResponse);
+      }
+
+      if (parts[0] === 'review' && parts.length === 3 && parts[1] === 'cases' && req.method === 'GET') {
+        const reviewCase = await getReviewCase(parts[2]);
+        if (!reviewCase) return send(res, 404, { error: 'Review case not found', requestId });
+        return send(res, 200, reviewCase, {}, ContractSchemas.ReviewCaseDetailResponse);
+      }
+
+      if (parts[0] === 'review' && parts.length === 4 && parts[1] === 'cases' && parts[3] === 'actions' && req.method === 'POST') {
+        const reviewCase = await recordReviewAction(parts[2], await readContractJson(req, ContractSchemas.ReviewActionRequest));
+        if (!reviewCase) return send(res, 404, { error: 'Review case not found', requestId });
+        return send(res, 201, { ok: true, case: reviewCase }, {}, ContractSchemas.ReviewActionResponse);
       }
 
       return send(res, 404, { error: 'Not found', requestId });

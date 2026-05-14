@@ -407,6 +407,81 @@ export const PacketResponse = looseObject({
   createdAt: DateLike
 });
 
+export const ReviewQueueCase = looseObject({
+  id: z.string(),
+  caseNumber: z.string(),
+  createdAt: DateLike.optional(),
+  updatedAt: DateLike.optional(),
+  unit: z.string(),
+  modelYear: z.number().nullable().optional(),
+  type: z.string(),
+  serial: z.string(),
+  hours: z.string(),
+  customer: z.string(),
+  location: z.string(),
+  stage: z.string(),
+  route: z.string(),
+  routeKey: z.string().optional(),
+  age: z.string(),
+  risk: z.enum(['low', 'medium', 'high']).or(z.string()),
+  riskScore: z.number(),
+  reviewStatus: z.string().optional(),
+  reviewStatusLabel: z.string().optional(),
+  confidence: z.string(),
+  proposedTrade: z.number().nullable().optional(),
+  lowValue: z.number().nullable().optional(),
+  highValue: z.number().nullable().optional(),
+  reconBudget: z.number().nullable().optional(),
+  reconLow: z.number().nullable().optional(),
+  reconHigh: z.number().nullable().optional(),
+  specs: z.array(z.tuple([z.string(), z.any()])),
+  riskFactors: z.array(z.tuple([z.string(), z.number(), z.string()])),
+  evidence: z.array(Json),
+  reviewLines: z.array(Json),
+  summary: z.string(),
+  source: Json.optional(),
+  sourceUrl: z.string().nullable().optional(),
+  listingFacts: Json.optional(),
+  packet: Json.nullable().optional(),
+  processingSummary: Json.optional(),
+  checklist: ChecklistResponse.optional(),
+  latestAction: Json.nullable().optional()
+});
+
+export const ReviewQueueResponse = looseObject({
+  generatedAt: DateLike,
+  summary: Json,
+  items: z.array(ReviewQueueCase)
+});
+
+export const ReviewCaseDetailResponse = ReviewQueueCase.extend({
+  evidenceItems: z.array(EvidenceItem).optional(),
+  findings: z.array(VisualFinding).optional(),
+  actions: z.array(Json).optional()
+}).passthrough();
+
+export const ReviewActionRequest = looseObject({
+  actionType: z.string().optional(),
+  action_type: z.string().optional(),
+  reviewer: z.string().optional(),
+  reviewedBy: z.string().optional(),
+  reviewed_by: z.string().optional(),
+  note: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  reviewStatus: z.string().nullable().optional(),
+  review_status: z.string().nullable().optional(),
+  route: Route.or(z.string()).nullable().optional(),
+  packetId: z.string().nullable().optional(),
+  packet_id: z.string().nullable().optional(),
+  payload: Json.optional(),
+  metadata: Json.optional()
+});
+
+export const ReviewActionResponse = looseObject({
+  ok: z.boolean(),
+  case: ReviewCaseDetailResponse
+});
+
 export const ArchiveResponse = looseObject({
   ok: z.boolean(),
   id: z.string(),
@@ -435,5 +510,10 @@ export const ContractSchemas = {
   GuidanceResponse,
   RoutingResponse,
   PacketResponse,
+  ReviewQueueCase,
+  ReviewQueueResponse,
+  ReviewCaseDetailResponse,
+  ReviewActionRequest,
+  ReviewActionResponse,
   ArchiveResponse
 };
