@@ -5,9 +5,13 @@
   let data = normalizeDataset(fallbackData);
   let selectedId = data.cases[0]?.id || null;
   let activeFilter = "all";
+  let searchQuery = "";
+  let sortMode = "updated";
   let loading = true;
   let error = null;
   let pendingAction = null;
+  let selectedEvidenceId = null;
+  let toast = null;
 
   function resolveSidecarUrl() {
     if (window.TRADE_REVIEW_SIDECAR_URL) return String(window.TRADE_REVIEW_SIDECAR_URL).replace(/\/$/, "");
@@ -49,8 +53,11 @@
   }
 
   function normalizeCase(item) {
-    const low = item.lowValue ?? item.proposedTrade ?? 0;
+    const low = item.lowValue ?? item.proposedTrade ?? null;
     const high = item.highValue ?? item.proposedTrade ?? low;
+    const packet = item.packet || null;
+    const evidenceItems = item.evidenceItems || [];
+    const actions = item.actions || [];
     return {
       ...item,
       id: item.id,
@@ -64,20 +71,32 @@
       location: item.location || "Location TBD",
       stage: item.stage || item.reviewStatusLabel || "Review",
       route: item.route || "Review",
+      routeKey: item.routeKey || item.route || "draft",
       age: item.age || "today",
       risk: item.risk || "medium",
       riskScore: Number(item.riskScore || 50),
+      reviewStatus: item.reviewStatus || item.reviewStatusLabel || "field_collection",
+      reviewStatusLabel: item.reviewStatusLabel || item.stage || "Review",
       confidence: item.confidence || "Pending",
       proposedTrade: item.proposedTrade ?? null,
       lowValue: low,
       highValue: high,
       reconBudget: item.reconBudget ?? null,
+      reconLow: item.reconLow ?? null,
+      reconHigh: item.reconHigh ?? null,
       specs: item.specs || [],
       riskFactors: item.riskFactors || [],
       evidence: item.evidence || [],
+      evidenceItems,
       reviewLines: item.reviewLines || [],
       summary: item.summary || "No reviewer readout is available yet.",
-      sourceUrl: item.sourceUrl || item.source?.url || null
+      sourceUrl: item.sourceUrl || item.source?.url || null,
+      source: item.source || {},
+      packet,
+      checklist: item.checklist || {},
+      processingSummary: item.processingSummary || {},
+      latestAction: item.latestAction || actions[0] || null,
+      actions
     };
   }
 
@@ -108,13 +127,59 @@
     return "risk";
   }
 
+  function toneForStatus(item) {
+    if (item.reviewStatus === "approved") return "good";
+    if (item.reviewStatus === "technician_inspection_required" || item.routeKey === "technician_inspection_required") return "risk";
+    if (item.reviewStatus === "ready_for_fast_review" || item.reviewStatus === "ready_for_standard_review") return "good";
+    if (item.reviewStatus === "central_review_hold") return "risk";
+    return "watch";
+  }
+
+  function textMatches(item) {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      item.caseNumber,
+      item.unit,
+      item.modelYear,
+      item.serial,
+      item.customer,
+      item.location,
+      item.route,
+      item.stage,
+      item.sourceUrl
+    ].filter(Boolean).join(" ").toLowerCase().includes(query);
+  }
+
+  function filterMatches(item) {
+    if (activeFilter === "all") return true;
+    if (activeFilter === "high") return item.risk === "high";
+    if (activeFilter === "ready") return ["ready_for_fast_review", "ready_for_standard_review"].includes(item.reviewStatus);
+    if (activeFilter === "field") return item.reviewStatus === "field_collection" || item.routeKey === "needs_more_evidence";
+    if (activeFilter === "tech") return item.reviewStatus === "technician_inspection_required" || item.routeKey === "technician_inspection_required";
+    if (activeFilter === "valued") return item.proposedTrade != null || item.reconBudget != null;
+    if (activeFilter === "failed") return Number(item.processingSummary.failed || 0) > 0;
+    return item.risk === activeFilter || item.route.toLowerCase().includes(activeFilter);
+  }
+
   function filteredCases() {
-    if (activeFilter === "all") return data.cases;
-    return data.cases.filter((item) => item.risk === activeFilter || item.route.toLowerCase().includes(activeFilter));
+    return data.cases
+      .filter((item) => textMatches(item) && filterMatches(item))
+      .sort((a, b) => {
+        if (sortMode === "risk") return Number(b.riskScore || 0) - Number(a.riskScore || 0);
+        if (sortMode === "value") return Number(b.proposedTrade || 0) - Number(a.proposedTrade || 0);
+        if (sortMode === "evidence") return evidenceCompleteness(b) - evidenceCompleteness(a);
+        return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+      });
   }
 
   function selectedCase() {
     return data.cases.find((item) => item.id === selectedId) || data.cases[0] || null;
+  }
+
+  function selectedEvidence(item) {
+    if (!item || !selectedEvidenceId) return null;
+    return (item.evidenceItems || []).find((evidence) => evidence.id === selectedEvidenceId) || null;
   }
 
   function escapeHtml(value) {
@@ -147,6 +212,48 @@
     `;
   }
 
+  function humanize(value) {
+    return String(value || "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  function evidenceCompleteness(item) {
+    const checklist = item.checklist || {};
+    const required = Number(checklist.requiredCount || item.processingSummary.registered || 0);
+    const complete = Number(checklist.acceptedCount || item.processingSummary.complete || 0);
+    if (!required) return complete;
+    return Math.round((complete / required) * 100);
+  }
+
+  function evidenceQueueLabel(item) {
+    const summary = item.processingSummary || {};
+    const failed = Number(summary.failed || 0);
+    const active = Number(summary.processing || 0) + Number(summary.queued || 0) + Number(summary.pending || 0);
+    if (failed) return `${failed} failed`;
+    if (active) return `${active} processing`;
+    const accepted = Number(item.checklist?.acceptedCount || 0);
+    const missing = Number(item.checklist?.missingCount || 0);
+    if (accepted || missing) return `${accepted} ok / ${missing} missing`;
+    return `${summary.complete || 0} done`;
+  }
+
+  function previewableEvidence(items = []) {
+    return items.filter((item) => isPreviewableMedia(item));
+  }
+
+  function isPreviewableMedia(evidence = {}) {
+    const uri = String(evidence.storageUri || "");
+    const contentType = String(evidence.contentType || "");
+    return contentType.startsWith("image/") || /^https?:\/\/.+\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(uri);
+  }
+
+  function packetMarkdown(item) {
+    return item?.packet?.markdown || item?.packet?.preview || "";
+  }
+
   function renderTopbar() {
     return `
       <header class="ti-topbar">
@@ -159,10 +266,9 @@
         </div>
         <nav class="ti-nav" aria-label="Review navigation">
           <a class="ti-nav__item" aria-current="page" href="#">Trade Queue</a>
-          <a class="ti-nav__item" href="#">Evidence</a>
-          <a class="ti-nav__item" href="#">Valuations</a>
-          <a class="ti-nav__item" href="#">Recon</a>
-          <a class="ti-nav__item" href="#">Inventory</a>
+          <a class="ti-nav__item" href="#evidence-panel">Evidence</a>
+          <a class="ti-nav__item" href="#packet-panel">Packet</a>
+          <a class="ti-nav__item" href="#history-panel">History</a>
         </nav>
         <div class="ti-topbar__right">
           ${badge(loading ? "Syncing" : error ? "Demo fallback" : data.user.period, error ? "watch" : "info")}
@@ -206,20 +312,45 @@
   function renderFilters() {
     const filters = [
       ["all", "All"],
+      ["ready", "Ready"],
+      ["field", "Field evidence"],
+      ["tech", "Tech hold"],
       ["high", "High risk"],
-      ["medium", "Medium"],
-      ["fast", "Fast path"]
+      ["valued", "Valued"],
+      ["failed", "Media gaps"]
     ];
 
-    return filters.map(([value, label]) => `
-      <button class="ti-button" type="button" data-filter="${escapeHtml(value)}" aria-pressed="${activeFilter === value}">
-        ${escapeHtml(label)}
-      </button>
-    `).join("");
+    return `
+      <div class="queue-tools">
+        <label class="queue-search">
+          <span>Search</span>
+          <input type="search" value="${escapeHtml(searchQuery)}" placeholder="Case, unit, source, serial" data-search>
+        </label>
+        <label class="queue-sort">
+          <span>Sort</span>
+          <select data-sort>
+            ${[
+              ["updated", "Recently updated"],
+              ["risk", "Highest risk"],
+              ["value", "Highest value"],
+              ["evidence", "Best evidence"]
+            ].map(([value, label]) => `<option value="${value}" ${sortMode === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="ti-toolbar" aria-label="Queue filters">
+        ${filters.map(([value, label]) => `
+          <button class="ti-button" type="button" data-filter="${escapeHtml(value)}" aria-pressed="${activeFilter === value}">
+            ${escapeHtml(label)}
+          </button>
+        `).join("")}
+      </div>
+    `;
   }
 
   function renderQueue() {
-    const rows = filteredCases().map((item) => `
+    const visibleCases = filteredCases();
+    const rows = visibleCases.map((item) => `
       <button class="case-row" type="button" data-case-id="${escapeHtml(item.id)}" aria-selected="${item.id === selectedId}">
         <span class="case-id">${escapeHtml(item.caseNumber)}</span>
         <span class="unit-cell">
@@ -232,6 +363,7 @@
         </span>
         <span class="money-cell">${formatMoney(item.proposedTrade)}</span>
         <span>${riskChip(item.risk)}</span>
+        <span class="evidence-cell">${escapeHtml(evidenceQueueLabel(item))}</span>
         <span class="stage-cell">${escapeHtml(item.stage)}</span>
         <span class="age-cell">${escapeHtml(item.age)}</span>
       </button>
@@ -239,9 +371,12 @@
 
     return `
       <section class="review-queue" aria-labelledby="queue-title">
-        <div class="ti-section-head">
-          <h2 id="queue-title" class="ti-section-title">Tickets needing review</h2>
-          <div class="ti-toolbar" aria-label="Queue filters">${renderFilters()}</div>
+        <div class="ti-section-head queue-heading">
+          <div>
+            <h2 id="queue-title" class="ti-section-title">Tickets needing review</h2>
+            <p class="section-subcopy">${visibleCases.length} shown / ${data.cases.length} total</p>
+          </div>
+          ${renderFilters()}
         </div>
         <div class="ti-panel">
           <div class="queue-head" aria-hidden="true">
@@ -250,25 +385,143 @@
             <div>Source</div>
             <div>Trade</div>
             <div>Risk</div>
+            <div>Evidence</div>
             <div>Stage</div>
             <div>Age</div>
           </div>
-          ${rows || `<div class="summary-panel"><p class="summary-copy">No review tickets match this filter.</p></div>`}
+          ${rows || `<div class="summary-panel"><p class="summary-copy">No review tickets match this view.</p></div>`}
         </div>
       </section>
     `;
   }
 
-  function renderEvidence(item) {
+  function renderWorkflow(item) {
+    const active = workflowState(item);
+    const steps = [
+      ["field", "Field collection"],
+      ["review", "Used review"],
+      ["tech", "Tech hold"],
+      ["approved", "Approved"]
+    ];
     return `
-      <div class="evidence-strip" aria-label="Evidence coverage">
-        ${item.evidence.slice(0, 8).map((evidence) => `
-          <div class="evidence-tile" data-status="${escapeHtml(evidence.status)}">
-            <div class="evidence-tile__label">${escapeHtml(evidence.label)}</div>
-            <div class="evidence-tile__meta">${escapeHtml(evidence.meta)}</div>
+      <div class="workflow-strip" aria-label="Reviewer workflow state">
+        ${steps.map(([key, label]) => `
+          <div class="workflow-step" data-active="${active === key}" data-complete="${isWorkflowComplete(active, key)}">
+            <span></span>
+            <strong>${escapeHtml(label)}</strong>
           </div>
         `).join("")}
       </div>
+    `;
+  }
+
+  function workflowState(item) {
+    if (item.reviewStatus === "approved") return "approved";
+    if (item.reviewStatus === "technician_inspection_required" || item.routeKey === "technician_inspection_required") return "tech";
+    if (["ready_for_fast_review", "ready_for_standard_review", "central_review_hold"].includes(item.reviewStatus)) return "review";
+    return "field";
+  }
+
+  function isWorkflowComplete(active, key) {
+    const order = ["field", "review", "tech", "approved"];
+    if (active === "tech") return ["field", "review"].includes(key);
+    return order.indexOf(key) < order.indexOf(active);
+  }
+
+  function renderEvidence(item) {
+    return `
+      <div class="evidence-strip" aria-label="Evidence coverage">
+        ${item.evidence.slice(0, 10).map((evidence) => `
+          <button class="evidence-tile" data-status="${escapeHtml(evidence.status)}" data-preview-evidence="${escapeHtml(evidence.evidenceItemId || "")}" type="button" ${evidence.evidenceItemId ? "" : "disabled"}>
+            <div class="evidence-tile__label">${escapeHtml(evidence.label)}</div>
+            <div class="evidence-tile__meta">${escapeHtml(evidence.meta)}</div>
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderEvidencePanel(item) {
+    const thumbnails = previewableEvidence(item.evidenceItems);
+    const allEvidence = item.evidenceItems || [];
+    return `
+      <section id="evidence-panel" class="ti-panel evidence-panel" aria-labelledby="evidence-title">
+        <div class="ti-section-head">
+          <div>
+            <h2 id="evidence-title" class="ti-section-title">Evidence preview</h2>
+            <p class="section-subcopy">${escapeHtml(evidenceQueueLabel(item))}</p>
+          </div>
+          ${badge(`${item.processingSummary.complete || 0} done / ${item.processingSummary.failed || 0} failed`, Number(item.processingSummary.failed || 0) ? "risk" : "good")}
+        </div>
+        ${thumbnails.length ? `
+          <div class="media-grid">
+            ${thumbnails.slice(0, 8).map((evidence) => `
+              <button class="media-card" type="button" data-preview-evidence="${escapeHtml(evidence.id)}">
+                <img src="${escapeHtml(evidence.storageUri)}" alt="${escapeHtml(humanize(evidence.checklistSlot || evidence.originalFileName || "Evidence image"))}" loading="lazy">
+                <span>${escapeHtml(humanize(evidence.checklistSlot || evidence.originalFileName || "Evidence image"))}</span>
+              </button>
+            `).join("")}
+          </div>
+        ` : `
+          <div class="empty-state">
+            <strong>No previewable image URLs yet.</strong>
+            <span>Field uploads, local OpenClaw media, unsupported files, or failed remote downloads still appear in the evidence ledger below.</span>
+          </div>
+        `}
+        ${allEvidence.length ? `
+          <div class="evidence-ledger">
+            ${allEvidence.slice(0, 10).map((evidence) => `
+              <div class="ledger-row">
+                <span>${escapeHtml(humanize(evidence.checklistSlot || evidence.originalFileName || "Unslotted evidence"))}</span>
+                ${badge(`${humanize(evidence.qualityStatus)} / ${humanize(evidence.analysisStatus)}`, evidence.analysisStatus === "failed" ? "risk" : evidence.qualityStatus === "accepted" ? "good" : "watch")}
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
+  function renderActionsPanel(item) {
+    const actions = item.actions?.length ? item.actions : item.latestAction ? [item.latestAction] : [];
+    return `
+      <section id="history-panel" class="ti-panel summary-panel" aria-labelledby="history-title">
+        <div class="ti-section-head">
+          <h2 id="history-title" class="ti-section-title">Reviewer actions</h2>
+          ${badge(actions.length ? `${actions.length} recorded` : "No actions", actions.length ? "info" : "watch")}
+        </div>
+        <div class="action-history">
+          ${actions.length ? actions.slice(0, 8).map((action) => `
+            <div class="action-history__item">
+              <div>
+                <strong>${escapeHtml(humanize(action.actionType || "note"))}</strong>
+                <span>${escapeHtml(formatTimestamp(action.createdAt))} / ${escapeHtml(action.reviewer || "reviewer")}</span>
+              </div>
+              <p>${escapeHtml(action.note || "No note recorded.")}</p>
+            </div>
+          `).join("") : `<p class="summary-copy">No reviewer decision has been recorded for this case yet.</p>`}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderPacketPanel(item) {
+    const markdown = packetMarkdown(item);
+    return `
+      <section id="packet-panel" class="ti-panel summary-panel" aria-labelledby="packet-title">
+        <div class="ti-section-head">
+          <div>
+            <h2 id="packet-title" class="ti-section-title">Packet preview</h2>
+            <p class="section-subcopy">${item.packet?.createdAt ? `Generated ${formatTimestamp(item.packet.createdAt)}` : "No packet has been generated for this ticket."}</p>
+          </div>
+          <div class="packet-actions">
+            <button class="ti-button" type="button" data-export="copy_packet" ${markdown ? "" : "disabled"}>Copy</button>
+            <button class="ti-button" type="button" data-export="download_packet" ${markdown ? "" : "disabled"}>Download</button>
+            <button class="ti-button" type="button" data-action="generate_packet" ${pendingAction ? "disabled" : ""}>Generate</button>
+          </div>
+        </div>
+        ${markdown ? `<pre class="packet-preview">${escapeHtml(markdown)}</pre>` : `<p class="summary-copy">Generate a packet after evidence processing to capture the current route, valuation posture, recon posture, and reviewer brief.</p>`}
+      </section>
     `;
   }
 
@@ -285,11 +538,12 @@
         <section class="ti-panel">
           <div class="detail-panel__head">
             <span class="detail-panel__case">${escapeHtml(item.caseNumber)}</span>
-            ${badge(item.route, toneForRisk(item.risk))}
+            ${badge(item.route, toneForStatus(item))}
           </div>
           <div class="detail-panel__body">
             <h2 id="detail-title" class="detail-title">${escapeHtml(item.unit)} - MY ${escapeHtml(item.modelYear)}</h2>
             <p class="detail-subtitle">SN ${escapeHtml(item.serial)} / ${escapeHtml(item.hours)} / ${escapeHtml(item.type)}</p>
+            ${renderWorkflow(item)}
 
             <div class="spec-grid">
               ${item.specs.map(([label, value]) => `
@@ -337,10 +591,16 @@
               `).join("")}
             </div>
           </div>
-          <div class="detail-actions">
-            <button class="ti-button" data-action="hold_for_technician" type="button" ${pendingAction ? "disabled" : ""}>Hold</button>
-            <button class="ti-button" data-action="request_more_evidence" type="button" ${pendingAction ? "disabled" : ""}>Request evidence</button>
-            <button class="ti-button" data-variant="primary" data-action="approve_packet" type="button" ${pendingAction ? "disabled" : ""}>Approve packet</button>
+          <div class="decision-box">
+            <label class="review-note">
+              <span>Reviewer note</span>
+              <textarea id="review-note" rows="3" placeholder="Add context for sales, used team, or technician handoff"></textarea>
+            </label>
+            <div class="detail-actions">
+              <button class="ti-button" data-action="hold_for_technician" type="button" ${pendingAction ? "disabled" : ""}>Hold</button>
+              <button class="ti-button" data-action="request_more_evidence" type="button" ${pendingAction ? "disabled" : ""}>Request evidence</button>
+              <button class="ti-button" data-variant="primary" data-action="approve_packet" type="button" ${pendingAction ? "disabled" : ""}>Approve packet</button>
+            </div>
           </div>
         </section>
 
@@ -351,10 +611,45 @@
           </div>
           <p class="summary-copy">${escapeHtml(item.summary)}</p>
           ${item.sourceUrl ? `<p class="summary-copy"><a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Source listing</a></p>` : ""}
-          ${item.packet?.preview ? `<pre class="packet-preview">${escapeHtml(item.packet.preview)}</pre>` : ""}
         </section>
+        ${renderEvidencePanel(item)}
+        ${renderPacketPanel(item)}
+        ${renderActionsPanel(item)}
       </aside>
     `;
+  }
+
+  function renderEvidenceModal(item) {
+    const evidence = selectedEvidence(item);
+    if (!evidence) return "";
+    return `
+      <div class="evidence-modal" role="dialog" aria-modal="true" aria-labelledby="evidence-modal-title">
+        <button class="evidence-modal__backdrop" type="button" data-close-preview aria-label="Close evidence preview"></button>
+        <div class="evidence-modal__panel">
+          <div class="ti-section-head">
+            <div>
+              <h2 id="evidence-modal-title" class="ti-section-title">${escapeHtml(humanize(evidence.checklistSlot || evidence.originalFileName || "Evidence"))}</h2>
+              <p class="section-subcopy">${escapeHtml(evidence.originalFileName || evidence.storageUri || "No file name")}</p>
+            </div>
+            <button class="ti-button" type="button" data-close-preview>Close</button>
+          </div>
+          ${isPreviewableMedia(evidence)
+            ? `<img class="evidence-modal__image" src="${escapeHtml(evidence.storageUri)}" alt="${escapeHtml(humanize(evidence.checklistSlot || "Evidence image"))}">`
+            : `<div class="empty-state"><strong>Preview unavailable</strong><span>${escapeHtml(evidence.storageUri || "No media path recorded.")}</span></div>`}
+          <div class="evidence-modal__meta">
+            ${badge(`${humanize(evidence.qualityStatus)} quality`, evidence.qualityStatus === "accepted" ? "good" : evidence.qualityStatus === "rejected" ? "risk" : "watch")}
+            ${badge(`${humanize(evidence.analysisStatus)} analysis`, evidence.analysisStatus === "complete" ? "good" : evidence.analysisStatus === "failed" ? "risk" : "watch")}
+            <span>${escapeHtml(formatTimestamp(evidence.uploadedAt))}</span>
+          </div>
+          ${evidence.notes ? `<p class="summary-copy">${escapeHtml(evidence.notes)}</p>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderToast() {
+    if (!toast) return "";
+    return `<div class="review-toast" data-tone="${escapeHtml(toast.tone || "info")}">${escapeHtml(toast.message)}</div>`;
   }
 
   function render() {
@@ -370,9 +665,11 @@
         </main>
         <footer class="review-footnote">
           <span>Used Equipment Review Ops</span>
-          <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / Premier-Stotz Trade Desk v0.2</span>
+          <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / Premier-Stotz Trade Desk v0.3</span>
         </footer>
       </div>
+      ${renderEvidenceModal(item)}
+      ${renderToast()}
     `;
   }
 
@@ -408,9 +705,32 @@
     }
   }
 
-  async function submitReviewAction(actionType) {
+  async function generatePacket() {
     const item = selectedCase();
     if (!item || error) return;
+    pendingAction = "generate_packet";
+    render();
+    try {
+      const response = await fetch(apiUrl(`/trade-cases/${encodeURIComponent(item.id)}/packet`), { method: "POST" });
+      if (!response.ok) throw new Error(`Packet returned ${response.status}`);
+      await loadDetail(item.id);
+      showToast("Packet generated for the selected ticket.", "good");
+    } catch (err) {
+      showToast(`Packet generation failed: ${err.message}`, "risk");
+    } finally {
+      pendingAction = null;
+      render();
+    }
+  }
+
+  async function submitReviewAction(actionType) {
+    if (actionType === "generate_packet") {
+      await generatePacket();
+      return;
+    }
+    const item = selectedCase();
+    if (!item || error) return;
+    const noteFromUi = document.getElementById("review-note")?.value?.trim();
     pendingAction = actionType;
     render();
     const notes = {
@@ -425,22 +745,120 @@
         body: JSON.stringify({
           actionType,
           reviewer: "review-ui",
-          note: notes[actionType] || "Reviewer action from review UI."
+          note: noteFromUi || notes[actionType] || "Reviewer action from review UI.",
+          packetId: item.packet?.id || null
         })
       });
       if (!response.ok) throw new Error(`Action returned ${response.status}`);
       const body = await response.json();
       const updated = normalizeCase(body.case);
       data.cases = data.cases.map((candidate) => candidate.id === item.id ? { ...candidate, ...updated } : candidate);
+      showToast("Reviewer action recorded.", "good");
     } catch (err) {
-      error = `Action failed: ${err.message}`;
+      showToast(`Action failed: ${err.message}`, "risk");
     } finally {
       pendingAction = null;
       render();
     }
   }
 
+  async function copyPacket() {
+    const item = selectedCase();
+    const markdown = packetMarkdown(item);
+    if (!markdown) return;
+    try {
+      await navigator.clipboard.writeText(markdown);
+      showToast("Packet copied to clipboard.", "good");
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = markdown;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+      showToast("Packet copied to clipboard.", "good");
+    }
+  }
+
+  function downloadPacket() {
+    const item = selectedCase();
+    const markdown = packetMarkdown(item);
+    if (!markdown) return;
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${item.caseNumber || "trade-review"}-packet.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    showToast("Packet download started.", "good");
+  }
+
+  function showToast(message, tone = "info") {
+    toast = { message, tone };
+    render();
+    window.setTimeout(() => {
+      toast = null;
+      render();
+    }, 2600);
+  }
+
+  function refocusSearch() {
+    window.requestAnimationFrame(() => {
+      const search = document.querySelector("[data-search]");
+      if (!search) return;
+      search.focus();
+      search.setSelectionRange(search.value.length, search.value.length);
+    });
+  }
+
+  app.addEventListener("input", (event) => {
+    if (event.target.matches("[data-search]")) {
+      searchQuery = event.target.value;
+      const visible = filteredCases();
+      if (visible.length && !visible.some((item) => item.id === selectedId)) {
+        selectedId = visible[0].id;
+        selectedEvidenceId = null;
+        if (!error) loadDetail(selectedId);
+      }
+      render();
+      refocusSearch();
+    }
+  });
+
+  app.addEventListener("change", (event) => {
+    if (event.target.matches("[data-sort]")) {
+      sortMode = event.target.value;
+      render();
+    }
+  });
+
   app.addEventListener("click", (event) => {
+    const exportButton = event.target.closest("[data-export]");
+    if (exportButton) {
+      if (exportButton.dataset.export === "copy_packet") copyPacket();
+      if (exportButton.dataset.export === "download_packet") downloadPacket();
+      return;
+    }
+
+    const previewButton = event.target.closest("[data-preview-evidence]");
+    if (previewButton && previewButton.dataset.previewEvidence) {
+      selectedEvidenceId = previewButton.dataset.previewEvidence;
+      render();
+      return;
+    }
+
+    if (event.target.closest("[data-close-preview]")) {
+      selectedEvidenceId = null;
+      render();
+      return;
+    }
+
     const actionButton = event.target.closest("[data-action]");
     if (actionButton) {
       submitReviewAction(actionButton.dataset.action);
@@ -450,6 +868,7 @@
     const caseButton = event.target.closest("[data-case-id]");
     if (caseButton) {
       selectedId = caseButton.dataset.caseId;
+      selectedEvidenceId = null;
       render();
       if (!error) loadDetail(selectedId);
       return;
@@ -461,6 +880,8 @@
       const visible = filteredCases();
       if (visible.length && !visible.some((item) => item.id === selectedId)) {
         selectedId = visible[0].id;
+        selectedEvidenceId = null;
+        if (!error) loadDetail(selectedId);
       }
       render();
     }

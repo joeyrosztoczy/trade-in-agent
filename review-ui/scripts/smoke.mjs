@@ -46,7 +46,19 @@ for (const token of ["--ti-color-brand", "--ti-color-signal", "--ti-layout-sideb
   }
 }
 
-for (const selector of [".ti-topbar", ".ti-kpis", ".ti-panel", ".case-row", ".detail-actions"]) {
+for (const selector of [
+  ".ti-topbar",
+  ".ti-kpis",
+  ".ti-panel",
+  ".case-row",
+  ".detail-actions",
+  ".queue-search",
+  ".workflow-strip",
+  ".media-grid",
+  ".packet-actions",
+  ".action-history",
+  ".evidence-modal"
+]) {
   if (!allCss.includes(selector)) {
     throw new Error(`component CSS is missing ${selector}`);
   }
@@ -56,9 +68,14 @@ if (!demo.includes("TradeReviewDemoData")) {
   throw new Error("demo.js is not wired to demo data");
 }
 
+for (const behavior of ["copy_packet", "download_packet", "generate_packet", "data-preview-evidence", "data-search"]) {
+  if (!demo.includes(behavior)) {
+    throw new Error(`demo.js is missing ${behavior}`);
+  }
+}
+
 if (/letter-spacing\s*:\s*-/.test(allCss)) {
   throw new Error("negative letter-spacing is not allowed");
 }
 
 console.log("Review UI smoke check passed.");
-

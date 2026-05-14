@@ -417,6 +417,7 @@ Milestone numbers identify the recorded implementation specs. Phase numbers desc
 | M4 | [Demo Valuation And Recon Estimate](milestone-demo-valuation-recon.md) | Lightweight start to Phase 5 valuation/recon |
 | M5 | [Async Evidence Processing And Field Acknowledgements](milestone-async-evidence-processing.md) | Field-performance hardening for the evidence loop |
 | M6 | [Review UI Foundation And Design System](review-ui-design-system.md) | Phase 4 reviewer workflow UI |
+| M6.1 | [Review UI Production Polish](milestone-review-ui-production-polish.md) | Reviewer workbench polish for controlled field QA |
 | M7 | [Review UI Microsoft Entra Authentication](milestone-review-ui-entra-auth.md) | Replace temporary Basic Auth with Microsoft Entra OAuth/OIDC |
 
 ## Implementation Phases
@@ -470,6 +471,8 @@ Milestone 3.5, [API Contract And OpenClaw Boundary Hardening](milestone-boundary
 - Add packet export/download.
 
 Milestone 6, [Review UI Foundation And Design System](review-ui-design-system.md), starts Phase 4 by turning the Field Office concept into reusable design tokens, component primitives, a data-driven demo, and the implementation contract for connecting the reviewer queue/detail workflow to sidecar case, evidence, packet, valuation, and review-action state.
+
+Milestone 6.1, [Review UI Production Polish](milestone-review-ui-production-polish.md), makes the reviewer queue practical for controlled field QA by adding search, filters, sorting, evidence preview, packet copy/download, packet generation, reviewer notes, action history, and clearer workflow status.
 
 Milestone 7, [Review UI Microsoft Entra Authentication](milestone-review-ui-entra-auth.md), hardens the production review UI access model. The temporary Caddy Basic Auth gate is acceptable for controlled QA, but the product path should move to Microsoft Entra OAuth/OIDC with group-based reviewer roles, signed sessions, audit attribution, and sidecar authorization checks.
 
