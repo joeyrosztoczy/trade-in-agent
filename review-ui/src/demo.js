@@ -35,7 +35,16 @@
         cases: payload.items.map(normalizeCase)
       };
     }
-    return payload || { user: {}, summary: { kpis: [] }, cases: [] };
+    const fallback = payload || {};
+    return {
+      user: {
+        name: fallback.user?.name || "Used Team",
+        initials: fallback.user?.initials || "UT",
+        period: fallback.user?.period || "Static fallback"
+      },
+      summary: normalizeSummary(fallback.summary || {}, fallback.summary?.lastSync),
+      cases: (fallback.cases || []).map(normalizeCase)
+    };
   }
 
   function normalizeSummary(summary = {}, generatedAt) {
@@ -444,6 +453,7 @@
   function renderEvidencePanel(item) {
     const thumbnails = previewableEvidence(item.evidenceItems);
     const allEvidence = item.evidenceItems || [];
+    const processingSummary = item.processingSummary || {};
     return `
       <section id="evidence-panel" class="ti-panel evidence-panel" aria-labelledby="evidence-title">
         <div class="ti-section-head">
@@ -451,7 +461,7 @@
             <h2 id="evidence-title" class="ti-section-title">Evidence preview</h2>
             <p class="section-subcopy">${escapeHtml(evidenceQueueLabel(item))}</p>
           </div>
-          ${badge(`${item.processingSummary.complete || 0} done / ${item.processingSummary.failed || 0} failed`, Number(item.processingSummary.failed || 0) ? "risk" : "good")}
+          ${badge(`${processingSummary.complete || 0} done / ${processingSummary.failed || 0} failed`, Number(processingSummary.failed || 0) ? "risk" : "good")}
         </div>
         ${thumbnails.length ? `
           <div class="media-grid">
