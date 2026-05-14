@@ -261,44 +261,45 @@ https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
 
 The production route should be same-origin:
 
-- `GET /trade-review/*` serves static files from `review-ui/`.
+- `GET /trade-review/*` serves static files from `/var/www/trade-in-review-ui`.
 - `GET/POST /review/*` is reverse-proxied to `127.0.0.1:8788`.
 - Caddy applies temporary Basic Auth to both `/trade-review/*` and `/review/*`.
 - The sidecar should keep `CORS_ALLOW_ORIGIN` set to the public HTTPS origin.
 
 Do not commit Basic Auth plaintext passwords or Caddy hashes.
 
-Example Caddy route shape:
+Publish the static UI bundle after each app deploy:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" 'sudo rm -rf /var/www/trade-in-review-ui && sudo mkdir -p /var/www/trade-in-review-ui && sudo cp -R /home/openclaw/openclaw-workspace/trade-in-agent/review-ui/. /var/www/trade-in-review-ui/ && sudo chown -R root:www-data /var/www/trade-in-review-ui && sudo find /var/www/trade-in-review-ui -type d -exec chmod 755 {} \; && sudo find /var/www/trade-in-review-ui -type f -exec chmod 644 {} \;'
+```
+
+Example Caddy route shape in `/etc/caddy/conf.d/trade-in-review-ui.caddy`:
 
 ```caddyfile
-stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com {
-  encode gzip
+redir /trade-review /trade-review/ 308
 
-  reverse_proxy /api/messages* 127.0.0.1:3978
-  reverse_proxy /sharepoint/oauth/* 127.0.0.1:18789
-
-  @tradeReviewUi path /trade-review /trade-review/*
-  handle @tradeReviewUi {
-    basicauth {
-      stotz-review <caddy-bcrypt-hash>
-    }
-    uri strip_prefix /trade-review
-    root * /home/openclaw/openclaw-workspace/trade-in-agent/review-ui
-    file_server
+@tradeReviewUi path /trade-review/*
+handle @tradeReviewUi {
+  basic_auth {
+    stotz-review <caddy-bcrypt-hash>
   }
-
-  @tradeReviewApi path /review/*
-  handle @tradeReviewApi {
-    basicauth {
-      stotz-review <caddy-bcrypt-hash>
-    }
-    reverse_proxy 127.0.0.1:8788
-  }
-
-  header /trade-review/* {
+  uri strip_prefix /trade-review
+  root * /var/www/trade-in-review-ui
+  file_server
+  header {
     X-Content-Type-Options nosniff
     Referrer-Policy same-origin
+    X-Frame-Options DENY
   }
+}
+
+@tradeReviewApi path /review/*
+handle @tradeReviewApi {
+  basic_auth {
+    stotz-review <caddy-bcrypt-hash>
+  }
+  reverse_proxy 127.0.0.1:8788
 }
 ```
 
