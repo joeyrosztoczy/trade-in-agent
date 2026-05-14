@@ -11,8 +11,8 @@ The goal is to keep the design portable. Most future migration work should be mo
 - `src/styles/base.css` owns reset, body, focus, and responsive base behavior.
 - `src/styles/components.css` owns reusable UI primitives.
 - `src/styles/demo.css` owns only demo-page composition.
-- `src/demo-data.js` is structured mock trade-review data.
-- `src/demo.js` renders the demo from that data.
+- `src/demo-data.js` is structured mock trade-review fallback data.
+- `src/demo.js` renders sidecar review data when available, with mock data as fallback.
 
 ## Local Preview
 
@@ -27,6 +27,8 @@ Then open:
 http://127.0.0.1:5177
 ```
 
+Local preview calls the sidecar at `http://127.0.0.1:8788`. When the UI is served from a production hostname, it uses same-origin `/review/*` paths so Caddy can protect and proxy API calls.
+
 For a lightweight static QA check:
 
 ```bash
@@ -39,6 +41,5 @@ When this moves into the product app:
 
 1. Keep `tokens.css` as the source of truth or map it directly into the app token system.
 2. Convert the component classes into framework components one at a time.
-3. Replace `src/demo-data.js` with sidecar API data, keeping the same view-model shape where possible.
+3. Keep sidecar API data as the primary source and `src/demo-data.js` as fallback fixture data only.
 4. Treat `demo.css` as disposable page composition. Treat `tokens.css` and `components.css` as durable.
-

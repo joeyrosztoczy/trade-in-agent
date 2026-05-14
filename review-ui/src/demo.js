@@ -1,6 +1,6 @@
 (function () {
   const fallbackData = window.TradeReviewDemoData;
-  const sidecarUrl = window.TRADE_REVIEW_SIDECAR_URL || "http://127.0.0.1:8788";
+  const sidecarUrl = resolveSidecarUrl();
   const app = document.getElementById("app");
   let data = normalizeDataset(fallbackData);
   let selectedId = data.cases[0]?.id || null;
@@ -8,6 +8,16 @@
   let loading = true;
   let error = null;
   let pendingAction = null;
+
+  function resolveSidecarUrl() {
+    if (window.TRADE_REVIEW_SIDECAR_URL) return String(window.TRADE_REVIEW_SIDECAR_URL).replace(/\/$/, "");
+    if (["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)) return "http://127.0.0.1:8788";
+    return "";
+  }
+
+  function apiUrl(path) {
+    return `${sidecarUrl}${path}`;
+  }
 
   function normalizeDataset(payload) {
     if (payload?.items) {
@@ -370,7 +380,7 @@
     loading = true;
     render();
     try {
-      const response = await fetch(`${sidecarUrl}/review/cases?limit=100`);
+      const response = await fetch(apiUrl("/review/cases?limit=100"));
       if (!response.ok) throw new Error(`Sidecar returned ${response.status}`);
       data = normalizeDataset(await response.json());
       selectedId = data.cases.some((item) => item.id === selectedId) ? selectedId : data.cases[0]?.id || null;
@@ -388,7 +398,7 @@
 
   async function loadDetail(id) {
     try {
-      const response = await fetch(`${sidecarUrl}/review/cases/${encodeURIComponent(id)}`);
+      const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(id)}`));
       if (!response.ok) throw new Error(`Detail returned ${response.status}`);
       const detail = normalizeCase(await response.json());
       data.cases = data.cases.map((item) => item.id === id ? { ...item, ...detail } : item);
@@ -409,7 +419,7 @@
       approve_packet: "Reviewer approved this demo packet for QA."
     };
     try {
-      const response = await fetch(`${sidecarUrl}/review/cases/${encodeURIComponent(item.id)}/actions`, {
+      const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(item.id)}/actions`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -157,6 +157,7 @@ DEMO_VALUATION_WEB_SEARCH=true
 DEMO_VALUATION_WEB_SEARCH_REQUIRED=true
 DEMO_VALUATION_SEARCH_CONTEXT_SIZE=medium
 DEMO_VALUATION_EXTERNAL_WEB_ACCESS=true
+CORS_ALLOW_ORIGIN=https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com
 ENV
 chown openclaw:openclaw "$APP_ROOT/.env"
 chmod 600 "$APP_ROOT/.env"
@@ -247,6 +248,75 @@ systemctl restart trade-in-agent-sidecar.service
 systemctl restart openclaw-gateway
 REMOTE
 ```
+
+## Production Review UI Hosting
+
+The M6 review UI can be hosted from the same Stotz Sales VM through Caddy.
+
+Public URL:
+
+```text
+https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
+```
+
+The production route should be same-origin:
+
+- `GET /trade-review/*` serves static files from `review-ui/`.
+- `GET/POST /review/*` is reverse-proxied to `127.0.0.1:8788`.
+- Caddy applies temporary Basic Auth to both `/trade-review/*` and `/review/*`.
+- The sidecar should keep `CORS_ALLOW_ORIGIN` set to the public HTTPS origin.
+
+Do not commit Basic Auth plaintext passwords or Caddy hashes.
+
+Example Caddy route shape:
+
+```caddyfile
+stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com {
+  encode gzip
+
+  reverse_proxy /api/messages* 127.0.0.1:3978
+  reverse_proxy /sharepoint/oauth/* 127.0.0.1:18789
+
+  @tradeReviewUi path /trade-review /trade-review/*
+  handle @tradeReviewUi {
+    basicauth {
+      stotz-review <caddy-bcrypt-hash>
+    }
+    uri strip_prefix /trade-review
+    root * /home/openclaw/openclaw-workspace/trade-in-agent/review-ui
+    file_server
+  }
+
+  @tradeReviewApi path /review/*
+  handle @tradeReviewApi {
+    basicauth {
+      stotz-review <caddy-bcrypt-hash>
+    }
+    reverse_proxy 127.0.0.1:8788
+  }
+
+  header /trade-review/* {
+    X-Content-Type-Options nosniff
+    Referrer-Policy same-origin
+  }
+}
+```
+
+After applying Caddy config:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" 'sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy'
+```
+
+Then verify:
+
+```bash
+curl -I https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
+curl -u "$USER:$PASSWORD" -I https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
+curl -u "$USER:$PASSWORD" https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/review/cases?limit=1
+```
+
+This Basic Auth gate is temporary. Replace it with Microsoft Entra OAuth/OIDC under [Milestone 7](milestone-review-ui-entra-auth.md).
 
 ## Verification
 
