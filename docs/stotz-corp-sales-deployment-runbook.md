@@ -117,7 +117,7 @@ DB_USER=trade_in_agent
 DB_PASSWORD=trade_in_agent
 
 apt-get update
-apt-get install -y postgresql nodejs npm
+apt-get install -y postgresql nodejs npm ffmpeg
 
 mkdir -p "$APP_ROOT" "$WORKSPACE/docs/trade-in-agent"
 tar -xzf /tmp/trade-in-agent.tar.gz -C "$APP_ROOT"
@@ -150,6 +150,10 @@ OPENAI_API_KEY=$OPENAI_KEY
 OPENAI_VISION_MODE=live
 OPENAI_VISION_MODEL=gpt-5.4-mini
 OPENAI_VISION_REVIEW_MODEL=gpt-5.4
+OPENCLAW_MEDIA_ROOT=/home/openclaw/.openclaw/media
+FFMPEG_PATH=ffmpeg
+TRADE_IN_VIDEO_FRAME_COUNT=3
+TRADE_IN_VIDEO_FRAME_INTERVAL_SECONDS=5
 DEMO_VALUATION_ENABLED=true
 DEMO_VALUATION_MODE=live
 DEMO_VALUATION_MODEL=gpt-5.5
@@ -440,6 +444,31 @@ For this milestone, the critical path is proving that a Teams-uploaded photo bec
 - a staged workspace media path passed to the agent
 
 The sidecar should then resolve that reference, analyze the real image with OpenAI, persist evidence metadata, and respond with the case number plus accepted/retake/missing guidance.
+
+Milestone 2.5 requires these sidecar runtime settings:
+
+```text
+OPENCLAW_MEDIA_ROOT=/home/openclaw/.openclaw/media
+FFMPEG_PATH=ffmpeg
+TRADE_IN_VIDEO_FRAME_COUNT=3
+TRADE_IN_VIDEO_FRAME_INTERVAL_SECONDS=5
+```
+
+The sidecar resolver accepts `media://inbound/<media-id>`, guarded local OpenClaw media paths, and guarded `file://` paths. `media://inbound/...` is scoped to the inbound media folder only. Paths outside the allowlisted roots, symlinks, null-byte paths, and traversal escapes are rejected.
+
+Video evidence is frame-sampled through `ffmpeg` before being sent to the OpenAI vision model. If frame sampling fails, the item is marked `unsupported` instead of being retried indefinitely, and the field guidance asks for still photos of the highest-priority missing sections.
+
+Check video support on the VM:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" 'ffmpeg -version | head -1'
+```
+
+Check sidecar media resolution without exposing secrets:
+
+```bash
+ssh -F "$SSH_CONFIG" "$SSH_HOST" 'sudo -u openclaw -H bash -lc "set -a; source /home/openclaw/openclaw-workspace/trade-in-agent/.env; set +a; cd /home/openclaw/openclaw-workspace/trade-in-agent/app && node --input-type=module -e \"import fs from '\\''node:fs/promises'\\''; import path from '\\''node:path'\\''; import { resolveImageUrl } from '\\''./src/visualInference.js'\\''; await fs.mkdir(path.join(process.env.OPENCLAW_MEDIA_ROOT, '\\''inbound'\\''), { recursive: true }); await fs.writeFile(path.join(process.env.OPENCLAW_MEDIA_ROOT, '\\''inbound'\\'', '\\''codex-media-check.jpg'\\''), Buffer.from('\\''media-check'\\'')); const url = await resolveImageUrl('\\''media://inbound/codex-media-check.jpg'\\'', '\\''image/jpeg'\\''); if (!url?.startsWith('\\''data:image/jpeg;base64,'\\'')) throw new Error('\\''media resolver failed'\\''); console.log('\\''media resolver ok'\\'');\""'
+```
 
 Known live trace from May 5, 2026:
 

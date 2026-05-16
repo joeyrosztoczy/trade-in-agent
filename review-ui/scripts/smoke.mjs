@@ -1,3 +1,4 @@
+import vm from "node:vm";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -72,6 +73,47 @@ for (const behavior of ["copy_packet", "download_packet", "generate_packet", "da
   if (!demo.includes(behavior)) {
     throw new Error(`demo.js is missing ${behavior}`);
   }
+}
+
+const app = {
+  _html: "",
+  addEventListener() {},
+  set innerHTML(value) {
+    this._html = value;
+  },
+  get innerHTML() {
+    return this._html;
+  }
+};
+const context = {
+  console,
+  window: {
+    location: { hostname: "localhost" },
+    requestAnimationFrame(fn) { fn(); },
+    addEventListener() {},
+    setTimeout
+  },
+  document: {
+    getElementById(id) { return id === "app" ? app : null; },
+    querySelector() { return null; },
+    createElement() {
+      return { setAttribute() {}, style: {}, select() {}, remove() {}, click() {}, value: "", href: "", download: "" };
+    },
+    body: { appendChild() {} },
+    execCommand() { return true; }
+  },
+  navigator: { clipboard: { writeText: async () => {} } },
+  fetch: async () => ({ ok: false, status: 503, json: async () => ({}) }),
+  Blob,
+  URL,
+  setTimeout
+};
+context.globalThis = context;
+vm.createContext(context);
+vm.runInContext(readFileSync(join(root, "src/demo-data.js"), "utf8"), context, { filename: "demo-data.js" });
+vm.runInContext(demo, context, { filename: "demo.js" });
+if (!app.innerHTML.includes("review-shell") || !app.innerHTML.includes("Loading live review queue")) {
+  throw new Error("demo.js did not render the startup skeleton shell");
 }
 
 if (/letter-spacing\s*:\s*-/.test(allCss)) {

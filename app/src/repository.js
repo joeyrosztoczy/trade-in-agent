@@ -783,7 +783,8 @@ export async function completeAnalysisJob(jobId, result = {}) {
 
 export async function failAnalysisJob(job, error) {
   const message = error?.message || String(error);
-  const terminal = Number(job.attempts || 0) >= Number(job.maxAttempts || 3);
+  const unsupported = error?.analysisStatus === 'unsupported' || error?.statusCode === 422;
+  const terminal = unsupported || Number(job.attempts || 0) >= Number(job.maxAttempts || 3);
   const backoffSeconds = Math.min(300, Math.pow(2, Math.max(0, Number(job.attempts || 1) - 1)) * 15);
   const update = await query(
     `UPDATE evidence_analysis_jobs
@@ -807,13 +808,15 @@ export async function failAnalysisJob(job, error) {
   await query(
     `UPDATE evidence_items
      SET analysis_status = $2,
+         quality_status = CASE WHEN $5::text IS NULL THEN quality_status ELSE $5::text END,
          metadata_json = metadata_json || $3::jsonb
      WHERE trade_case_id = $1 AND id = $4`,
     [
       job.tradeCaseId,
-      terminal ? 'failed' : 'queued',
-      { analysisError: { message, terminal, jobId: job.id } },
-      job.evidenceItemId
+      unsupported ? 'unsupported' : terminal ? 'failed' : 'queued',
+      { analysisError: { message, terminal, unsupported, jobId: job.id } },
+      job.evidenceItemId,
+      unsupported ? (error?.qualityStatus || 'weak') : null
     ]
   );
 
@@ -1737,7 +1740,10 @@ function rollupEvidenceProcessingStatus(evidence = {}, job = null) {
 function buildProcessingStatusMessage({ caseNumber, summary, latestGuidance } = {}) {
   const lines = [];
   if (caseNumber) lines.push(`Trade case ${caseNumber} is processing.`);
-  lines.push(`Complete: ${summary.complete}. Processing: ${summary.processing}. Queued: ${summary.queued}. Failed: ${summary.failed}.`);
+  lines.push(`Complete: ${summary.complete}. Processing: ${summary.processing}. Queued: ${summary.queued}. Failed: ${summary.failed}. Unsupported: ${summary.unsupported}.`);
+  if (summary.unsupported > 0) {
+    lines.push('Some uploaded media could not be analyzed directly. Please send still photos of the highest-priority missing sections if the video or file cannot be processed.');
+  }
   if (summary.incomplete > 0) {
     lines.push('You can keep sending photos or video while I work through the queue.');
   }

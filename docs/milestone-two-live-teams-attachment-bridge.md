@@ -286,10 +286,12 @@ The agent should not tell the user the photo was reviewed unless the sidecar suc
 
 ## Video Handling
 
-For this milestone, support one of two outcomes:
+Implemented behavior for this milestone:
 
-- Preferred: sample frames from supported videos with `ffmpeg` and send representative frames to the OpenAI API.
-- Acceptable MVP fallback: store the video attachment metadata, mark `analysisStatus=needs_frame_sampling`, and ask the rep for still photos of the highest-priority missing sections.
+- Supported video references are resolved through the same guarded OpenClaw media resolver as photos.
+- The sidecar samples representative frames with `ffmpeg` and sends those frame images to the OpenAI API.
+- If `ffmpeg` is missing, the media path cannot be resolved, or frame sampling produces no frames, the evidence item is marked `analysisStatus=unsupported` with weak quality status instead of being retried indefinitely.
+- Field guidance reports unsupported evidence and asks the rep for still photos of the highest-priority missing sections.
 
 The fallback reply should be plain and field-useful:
 
@@ -304,10 +306,11 @@ Milestone 2.5 is complete when:
 - A Teams DM photo uploaded from iPhone to Stotz Sales Agent is available to the sidecar as a real image input.
 - The sidecar can resolve `media://inbound/<id>` references under `/home/openclaw/.openclaw/media/inbound`.
 - Unsafe paths outside the configured media roots are rejected in tests.
+- `media://inbound/...` traversal escapes are rejected; only files inside the inbound media root are accepted for that URI scheme.
 - The sidecar sends at least one Teams-uploaded image to the OpenAI API in live mode.
 - The evidence row stores original Teams/OpenClaw metadata and the normalized storage reference.
 - The agent reply includes the case number and a concise accepted/retake/missing summary.
-- Unsupported video files produce a clear next-step response rather than a silent failure.
+- Supported video files are sampled with `ffmpeg`; unsupported video files produce a clear next-step response rather than a silent failure or endless retry loop.
 - OpenClaw gateway logs do not show native image hydration failures such as missing `sharp`, or the sidecar bridge explicitly bypasses that path and documents the bypass.
 - No secrets, tokens, signed media URLs, or raw Authorization headers are written to docs, commits, or logs.
 
@@ -406,7 +409,7 @@ Expected:
 - In the live Stotz Teams DM path, does OpenClaw expose image uploads to the agent as inline image input, `media://inbound/...`, `MediaPath`, or a combination?
 - Does OpenClaw retain inbound media long enough for sidecar processing under load, or should the sidecar immediately copy every referenced file?
 - Do iPhone HEIC uploads arrive as HEIC, JPEG, or Teams-converted images?
-- Is `ffmpeg` installed on the Stotz VM for video frame sampling?
+- Is `ffmpeg` installed and healthy on each deployed VM after rollout?
 - Should group/channel trade-in evaluation be enabled later, or should the MVP remain direct-message first?
 - What SharePoint folder naming convention should become the durable evidence archive before Machine Finder Pro sync?
 
@@ -420,4 +423,4 @@ Expected:
 6. Add a deployment check/fix for OpenClaw native image hydration dependencies such as `sharp`.
 7. Add live QA trace commands to the Stotz deployment runbook.
 8. Deploy to Stotz and run the iPhone Teams direct-message test.
-9. Decide whether video sampling is in-scope for the first live test or deferred with explicit fallback guidance.
+9. Verify `ffmpeg` is installed on the Stotz VM and run a live or synthetic video-frame sampling check.

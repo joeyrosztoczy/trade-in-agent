@@ -1,4 +1,5 @@
 (function () {
+  const APP_VERSION = "v0.4";
   const fallbackData = window.TradeReviewDemoData;
   const sidecarUrl = resolveSidecarUrl();
   const app = document.getElementById("app");
@@ -9,6 +10,8 @@
   let sortMode = "updated";
   let loading = true;
   let error = null;
+  let fatalError = null;
+  let hasLoadedQueue = false;
   let pendingAction = null;
   let selectedEvidenceId = null;
   let toast = null;
@@ -358,6 +361,7 @@
   }
 
   function renderQueue() {
+    if (loading && !hasLoadedQueue) return renderQueueSkeleton();
     const visibleCases = filteredCases();
     const rows = visibleCases.map((item) => `
       <button class="case-row" type="button" data-case-id="${escapeHtml(item.id)}" aria-selected="${item.id === selectedId}">
@@ -399,6 +403,52 @@
             <div>Age</div>
           </div>
           ${rows || `<div class="summary-panel"><p class="summary-copy">No review tickets match this view.</p></div>`}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderQueueSkeleton() {
+    const rows = Array.from({ length: 7 }, (_, index) => `
+      <div class="case-row case-row--skeleton" aria-hidden="true">
+        <span class="skeleton skeleton--short"></span>
+        <span class="unit-cell">
+          <span class="skeleton skeleton--line"></span>
+          <span class="skeleton skeleton--short"></span>
+        </span>
+        <span class="customer-cell">
+          <span class="skeleton skeleton--line"></span>
+          <span class="skeleton skeleton--short"></span>
+        </span>
+        <span class="skeleton skeleton--money"></span>
+        <span class="skeleton skeleton--pill"></span>
+        <span class="skeleton skeleton--short"></span>
+        <span class="skeleton skeleton--short"></span>
+        <span class="skeleton skeleton--tiny"></span>
+      </div>
+    `).join("");
+
+    return `
+      <section class="review-queue" aria-labelledby="queue-title">
+        <div class="ti-section-head queue-heading">
+          <div>
+            <h2 id="queue-title" class="ti-section-title">Tickets needing review</h2>
+            <p class="section-subcopy">Loading live review queue...</p>
+          </div>
+          ${renderFilters()}
+        </div>
+        <div class="ti-panel">
+          <div class="queue-head" aria-hidden="true">
+            <div>Ticket</div>
+            <div>Unit</div>
+            <div>Source</div>
+            <div>Trade</div>
+            <div>Risk</div>
+            <div>Evidence</div>
+            <div>Stage</div>
+            <div>Age</div>
+          </div>
+          ${rows}
         </div>
       </section>
     `;
@@ -536,6 +586,7 @@
   }
 
   function renderDetail(item) {
+    if (loading && !hasLoadedQueue) return renderDetailSkeleton();
     if (!item) {
       return `<aside><section class="ti-panel summary-panel"><p class="summary-copy">No review case selected.</p></section></aside>`;
     }
@@ -629,6 +680,37 @@
     `;
   }
 
+  function renderDetailSkeleton() {
+    return `
+      <aside aria-label="Loading review detail">
+        <section class="ti-panel">
+          <div class="detail-panel__head">
+            <span class="skeleton skeleton--short"></span>
+            <span class="skeleton skeleton--pill"></span>
+          </div>
+          <div class="detail-panel__body">
+            <span class="skeleton skeleton--title"></span>
+            <span class="skeleton skeleton--line"></span>
+            <div class="workflow-strip workflow-strip--skeleton">
+              ${Array.from({ length: 4 }, () => `<div class="workflow-step"><span></span><strong><span class="skeleton skeleton--line"></span></strong></div>`).join("")}
+            </div>
+            <div class="spec-grid">
+              ${Array.from({ length: 4 }, () => `<div class="ti-field"><span class="skeleton skeleton--short"></span><span class="skeleton skeleton--line"></span></div>`).join("")}
+            </div>
+            <div class="value-block">
+              <span class="skeleton skeleton--short"></span>
+              <span class="skeleton skeleton--title"></span>
+              <span class="skeleton skeleton--line"></span>
+            </div>
+            <div class="evidence-strip">
+              ${Array.from({ length: 8 }, () => `<div class="evidence-tile"><span class="skeleton skeleton--line"></span><span class="skeleton skeleton--short"></span></div>`).join("")}
+            </div>
+          </div>
+        </section>
+      </aside>
+    `;
+  }
+
   function renderEvidenceModal(item) {
     const evidence = selectedEvidence(item);
     if (!evidence) return "";
@@ -662,25 +744,59 @@
     return `<div class="review-toast" data-tone="${escapeHtml(toast.tone || "info")}">${escapeHtml(toast.message)}</div>`;
   }
 
-  function render() {
-    const item = selectedCase();
-    app.innerHTML = `
+  function renderSystemBanner() {
+    if (!error) return "";
+    return `
+      <section class="system-banner" role="status">
+        <strong>Live sidecar unavailable.</strong>
+        <span>${escapeHtml(error)} The UI is showing static fallback data until the next successful refresh.</span>
+        <button class="ti-button" type="button" data-retry-load>Retry</button>
+      </section>
+    `;
+  }
+
+  function renderFatalError(errorValue) {
+    return `
       <div class="review-shell">
         ${renderTopbar()}
-        ${renderPagehead()}
-        ${renderKpis()}
-        <main class="review-main">
-          <div class="review-main__left">${renderQueue()}</div>
-          <div class="review-main__right">${renderDetail(item)}</div>
-        </main>
-        <footer class="review-footnote">
-          <span>Used Equipment Review Ops</span>
-          <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / Premier-Stotz Trade Desk v0.3</span>
-        </footer>
+        <section class="fatal-panel" role="alert">
+          <h1>Review UI could not render</h1>
+          <p>${escapeHtml(errorValue?.message || errorValue || "Unknown browser error")}</p>
+          <button class="ti-button" type="button" data-retry-load>Reload review queue</button>
+        </section>
       </div>
-      ${renderEvidenceModal(item)}
-      ${renderToast()}
     `;
+  }
+
+  function render() {
+    if (fatalError) {
+      app.innerHTML = renderFatalError(fatalError);
+      return;
+    }
+    const item = selectedCase();
+    try {
+      app.innerHTML = `
+        <div class="review-shell">
+          ${renderTopbar()}
+          ${renderPagehead()}
+          ${renderKpis()}
+          ${renderSystemBanner()}
+          <main class="review-main">
+            <div class="review-main__left">${renderQueue()}</div>
+            <div class="review-main__right">${renderDetail(item)}</div>
+          </main>
+          <footer class="review-footnote">
+            <span>Used Equipment Review Ops</span>
+            <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / Premier-Stotz Trade Desk ${APP_VERSION}</span>
+          </footer>
+        </div>
+        ${renderEvidenceModal(item)}
+        ${renderToast()}
+      `;
+    } catch (err) {
+      fatalError = err;
+      app.innerHTML = renderFatalError(err);
+    }
   }
 
   async function loadQueue() {
@@ -692,10 +808,12 @@
       data = normalizeDataset(await response.json());
       selectedId = data.cases.some((item) => item.id === selectedId) ? selectedId : data.cases[0]?.id || null;
       error = null;
+      hasLoadedQueue = true;
     } catch (err) {
       data = normalizeDataset(fallbackData);
       selectedId = data.cases[0]?.id || null;
       error = `Sidecar unavailable: ${err.message}`;
+      hasLoadedQueue = true;
     } finally {
       loading = false;
       render();
@@ -828,73 +946,106 @@
   }
 
   app.addEventListener("input", (event) => {
-    if (event.target.matches("[data-search]")) {
-      searchQuery = event.target.value;
-      const visible = filteredCases();
-      if (visible.length && !visible.some((item) => item.id === selectedId)) {
-        selectedId = visible[0].id;
-        selectedEvidenceId = null;
-        if (!error) loadDetail(selectedId);
+    try {
+      if (event.target.matches("[data-search]")) {
+        searchQuery = event.target.value;
+        const visible = filteredCases();
+        if (visible.length && !visible.some((item) => item.id === selectedId)) {
+          selectedId = visible[0].id;
+          selectedEvidenceId = null;
+          if (!error) loadDetail(selectedId);
+        }
+        render();
+        refocusSearch();
       }
+    } catch (err) {
+      fatalError = err;
       render();
-      refocusSearch();
     }
   });
 
   app.addEventListener("change", (event) => {
-    if (event.target.matches("[data-sort]")) {
-      sortMode = event.target.value;
+    try {
+      if (event.target.matches("[data-sort]")) {
+        sortMode = event.target.value;
+        render();
+      }
+    } catch (err) {
+      fatalError = err;
       render();
     }
   });
 
   app.addEventListener("click", (event) => {
-    const exportButton = event.target.closest("[data-export]");
-    if (exportButton) {
-      if (exportButton.dataset.export === "copy_packet") copyPacket();
-      if (exportButton.dataset.export === "download_packet") downloadPacket();
-      return;
-    }
-
-    const previewButton = event.target.closest("[data-preview-evidence]");
-    if (previewButton && previewButton.dataset.previewEvidence) {
-      selectedEvidenceId = previewButton.dataset.previewEvidence;
-      render();
-      return;
-    }
-
-    if (event.target.closest("[data-close-preview]")) {
-      selectedEvidenceId = null;
-      render();
-      return;
-    }
-
-    const actionButton = event.target.closest("[data-action]");
-    if (actionButton) {
-      submitReviewAction(actionButton.dataset.action);
-      return;
-    }
-
-    const caseButton = event.target.closest("[data-case-id]");
-    if (caseButton) {
-      selectedId = caseButton.dataset.caseId;
-      selectedEvidenceId = null;
-      render();
-      if (!error) loadDetail(selectedId);
-      return;
-    }
-
-    const filterButton = event.target.closest("[data-filter]");
-    if (filterButton) {
-      activeFilter = filterButton.dataset.filter;
-      const visible = filteredCases();
-      if (visible.length && !visible.some((item) => item.id === selectedId)) {
-        selectedId = visible[0].id;
-        selectedEvidenceId = null;
-        if (!error) loadDetail(selectedId);
+    try {
+      if (event.target.closest("[data-retry-load]")) {
+        fatalError = null;
+        error = null;
+        hasLoadedQueue = false;
+        loadQueue();
+        return;
       }
+
+      const exportButton = event.target.closest("[data-export]");
+      if (exportButton) {
+        if (exportButton.dataset.export === "copy_packet") copyPacket();
+        if (exportButton.dataset.export === "download_packet") downloadPacket();
+        return;
+      }
+
+      const previewButton = event.target.closest("[data-preview-evidence]");
+      if (previewButton && previewButton.dataset.previewEvidence) {
+        selectedEvidenceId = previewButton.dataset.previewEvidence;
+        render();
+        return;
+      }
+
+      if (event.target.closest("[data-close-preview]")) {
+        selectedEvidenceId = null;
+        render();
+        return;
+      }
+
+      const actionButton = event.target.closest("[data-action]");
+      if (actionButton) {
+        submitReviewAction(actionButton.dataset.action);
+        return;
+      }
+
+      const caseButton = event.target.closest("[data-case-id]");
+      if (caseButton) {
+        selectedId = caseButton.dataset.caseId;
+        selectedEvidenceId = null;
+        render();
+        if (!error) loadDetail(selectedId);
+        return;
+      }
+
+      const filterButton = event.target.closest("[data-filter]");
+      if (filterButton) {
+        activeFilter = filterButton.dataset.filter;
+        const visible = filteredCases();
+        if (visible.length && !visible.some((item) => item.id === selectedId)) {
+          selectedId = visible[0].id;
+          selectedEvidenceId = null;
+          if (!error) loadDetail(selectedId);
+        }
+        render();
+      }
+    } catch (err) {
+      fatalError = err;
       render();
     }
+  });
+
+  window.addEventListener("error", (event) => {
+    fatalError = event.error || new Error(event.message || "Browser runtime error");
+    render();
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    fatalError = event.reason || new Error("Unhandled browser promise rejection");
+    render();
   });
 
   render();

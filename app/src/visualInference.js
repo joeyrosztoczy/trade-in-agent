@@ -1,5 +1,8 @@
 import fs from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getChecklist, normalizeUnitType } from './checklists.js';
 
 const PROMPT_VERSION = 'phase-two-field-evidence-v2';
@@ -87,15 +90,18 @@ export async function analyzeEvidenceMedia({ evidence, tradeCase, request = {} }
   ];
 
   for (const item of media.slice(0, 6)) {
-    const imageUrl = await resolveImageUrl(item.storageUri || item.storage_uri, item.contentType || item.content_type);
-    if (imageUrl) {
-      content.push({ type: 'input_image', image_url: imageUrl, detail: 'auto' });
+    const imageUrls = await resolveImageInputsForMedia(item);
+    for (const imageUrl of imageUrls) {
+      if (imageUrl) {
+        content.push({ type: 'input_image', image_url: imageUrl, detail: 'auto' });
+      }
     }
   }
 
   if (content.length === 1) {
-    const error = new Error('No analyzable image input was available for visual inference');
-    error.statusCode = 400;
+    const error = unsupportedMediaError(evidence.mediaType === 'video'
+      ? 'Video evidence was received, but no sampled frames were available for visual inference. Install ffmpeg on the VM or ask the rep for still photos of the highest-priority missing sections.'
+      : 'No analyzable image input was available for visual inference.');
     throw error;
   }
 
@@ -202,19 +208,161 @@ function resolveMediaInputs(request, evidence) {
   return [evidence];
 }
 
-async function resolveImageUrl(storageUri, contentType = 'image/jpeg') {
+export async function resolveImageInputsForMedia(item = {}) {
+  const storageUri = item.storageUri || item.storage_uri;
+  const mediaType = String(item.mediaType || item.media_type || '').toLowerCase();
+  const contentType = String(item.contentType || item.content_type || '').toLowerCase();
+  const looksLikeVideo = mediaType === 'video' || contentType.startsWith('video/') || /\.(mp4|mov|m4v|webm)(\?.*)?$/i.test(String(storageUri || ''));
+
+  if (!looksLikeVideo) {
+    const imageUrl = await resolveImageUrl(storageUri, item.contentType || item.content_type || 'image/jpeg');
+    return imageUrl ? [imageUrl] : [];
+  }
+
+  return sampleVideoFrames(item);
+}
+
+export async function resolveImageUrl(storageUri, contentType = 'image/jpeg') {
   if (!storageUri) return null;
   if (/^https?:\/\//i.test(storageUri) || /^data:image\//i.test(storageUri)) return storageUri;
   if (/^teams:\/\//i.test(storageUri)) return null;
 
-  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
-  const candidate = path.isAbsolute(storageUri) ? storageUri : path.resolve(root, storageUri);
+  const candidate = await resolveLocalMediaPath(storageUri);
+  if (!candidate) return null;
   try {
     const data = await fs.readFile(candidate);
     return `data:${contentType || 'image/jpeg'};base64,${data.toString('base64')}`;
   } catch {
     return null;
   }
+}
+
+export async function resolveLocalMediaPath(storageUri) {
+  if (!storageUri || /^https?:\/\//i.test(storageUri) || /^data:image\//i.test(storageUri) || /^teams:\/\//i.test(storageUri)) {
+    return null;
+  }
+
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const mediaRoot = process.env.OPENCLAW_MEDIA_ROOT || '/home/openclaw/.openclaw/media';
+  const raw = String(storageUri);
+  if (raw.includes('\0')) return null;
+
+  const mediaInboundRoot = path.resolve(mediaRoot, 'inbound');
+  let allowedRoots = [repoRoot, mediaRoot].filter(Boolean);
+  let candidate;
+
+  try {
+    if (/^media:\/\/inbound\//i.test(raw)) {
+      const mediaId = decodeURIComponent(raw.replace(/^media:\/\/inbound\//i, ''));
+      candidate = path.resolve(mediaInboundRoot, mediaId);
+      allowedRoots = [mediaInboundRoot];
+    } else if (/^file:\/\//i.test(raw)) {
+      candidate = fileURLToPath(raw);
+    } else {
+      candidate = path.isAbsolute(raw) ? raw : path.resolve(repoRoot, raw);
+    }
+  } catch {
+    return null;
+  }
+
+  try {
+    const lstat = await fs.lstat(candidate);
+    if (lstat.isSymbolicLink()) return null;
+    const realCandidate = await fs.realpath(candidate);
+    const realRoots = await Promise.all(allowedRoots.map(async root => {
+      try {
+        return await fs.realpath(root);
+      } catch {
+        return path.resolve(root);
+      }
+    }));
+    const allowed = realRoots.some(root => realCandidate === root || realCandidate.startsWith(`${root}${path.sep}`));
+    return allowed ? realCandidate : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function sampleVideoFrames(item = {}) {
+  const storageUri = item.storageUri || item.storage_uri;
+  const videoPath = await resolveLocalMediaPath(storageUri);
+  if (!videoPath) {
+    throw unsupportedMediaError('Video evidence was received, but the sidecar could not resolve it under the allowlisted OpenClaw media root.');
+  }
+
+  const frameCount = Math.max(1, Math.min(Number(process.env.TRADE_IN_VIDEO_FRAME_COUNT || 3), 6));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'trade-in-video-'));
+  const outputPattern = path.join(tmpDir, 'frame-%03d.jpg');
+  try {
+    await execFilePromise(process.env.FFMPEG_PATH || 'ffmpeg', [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-i',
+      videoPath,
+      '-vf',
+      `fps=1/${Math.max(1, Number(process.env.TRADE_IN_VIDEO_FRAME_INTERVAL_SECONDS || 5))}`,
+      '-frames:v',
+      String(frameCount),
+      outputPattern
+    ], { timeout: Number(process.env.TRADE_IN_FFMPEG_TIMEOUT_MS || 30000) });
+
+    let files = await readSampledFrameFiles(tmpDir, frameCount);
+    if (!files.length) {
+      await execFilePromise(process.env.FFMPEG_PATH || 'ffmpeg', [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-ss',
+        '0',
+        '-i',
+        videoPath,
+        '-frames:v',
+        '1',
+        path.join(tmpDir, 'fallback-001.jpg')
+      ], { timeout: Number(process.env.TRADE_IN_FFMPEG_TIMEOUT_MS || 30000) });
+      files = await readSampledFrameFiles(tmpDir, frameCount);
+    }
+    if (!files.length) throw unsupportedMediaError('Video evidence was received, but ffmpeg did not produce any usable sampled frames.');
+    const frames = [];
+    for (const file of files) {
+      const data = await fs.readFile(path.join(tmpDir, file));
+      frames.push(`data:image/jpeg;base64,${data.toString('base64')}`);
+    }
+    return frames;
+  } catch (error) {
+    if (error?.statusCode === 422) throw error;
+    throw unsupportedMediaError(`Video evidence was received, but frame sampling failed: ${error.message || error}`);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function readSampledFrameFiles(tmpDir, frameCount) {
+  return (await fs.readdir(tmpDir)).filter(file => file.endsWith('.jpg')).sort().slice(0, frameCount);
+}
+
+function execFilePromise(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.message = [error.message, stderr].filter(Boolean).join(': ');
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
+
+function unsupportedMediaError(message) {
+  const error = new Error(message);
+  error.statusCode = 422;
+  error.analysisStatus = 'unsupported';
+  error.qualityStatus = 'weak';
+  return error;
 }
 
 function extractOutputText(raw) {
