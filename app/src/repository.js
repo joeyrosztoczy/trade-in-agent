@@ -172,6 +172,7 @@ export async function recordReviewAction(id, input = {}) {
   const nextRoute = input.route || routeForAction(actionType);
   const packetId = input.packetId || input.packet_id || null;
   const payload = input.payload || input.metadata || {};
+  const reviewerIdentity = input.reviewerIdentity || input.authenticatedReviewer || payload.authenticatedReviewer || {};
 
   const inserted = await withTransaction(async client => {
     const exists = await client.query('SELECT * FROM trade_cases WHERE id = $1', [id]);
@@ -179,11 +180,27 @@ export async function recordReviewAction(id, input = {}) {
 
     const action = await client.query(
       `INSERT INTO review_actions (
-        trade_case_id, reviewer, action_type, note, review_status, route, packet_id, payload_json
+        trade_case_id, reviewer, action_type, note, review_status, route, packet_id, payload_json,
+        reviewer_entra_object_id, reviewer_display_name, reviewer_email, reviewer_upn, reviewer_role, reviewer_tenant_id
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
-      [id, reviewer, actionType, note, nextReviewStatus, nextRoute, packetId, payload]
+      [
+        id,
+        reviewer,
+        actionType,
+        note,
+        nextReviewStatus,
+        nextRoute,
+        packetId,
+        payload,
+        reviewerIdentity.entraObjectId || reviewerIdentity.objectId || null,
+        reviewerIdentity.displayName || null,
+        reviewerIdentity.email || null,
+        reviewerIdentity.upn || null,
+        reviewerIdentity.role || null,
+        reviewerIdentity.tenantId || null
+      ]
     );
 
     await client.query(
@@ -1526,6 +1543,14 @@ function rowToReviewAction(row = {}) {
     reviewStatus: row.review_status,
     route: row.route,
     packetId: row.packet_id,
+    reviewerIdentity: {
+      entraObjectId: row.reviewer_entra_object_id || null,
+      displayName: row.reviewer_display_name || null,
+      email: row.reviewer_email || null,
+      upn: row.reviewer_upn || null,
+      role: row.reviewer_role || null,
+      tenantId: row.reviewer_tenant_id || null
+    },
     payload: row.payload_json || {}
   };
 }

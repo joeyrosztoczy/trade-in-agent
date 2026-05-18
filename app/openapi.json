@@ -1337,6 +1337,69 @@
         "x-stable-tool-name": "trade_case_review_get"
       }
     },
+    "/review/cases/{tradeCaseId}/packet": {
+      "post": {
+        "operationId": "trade_in_review_generate_packet",
+        "summary": "Generate a reviewer-facing trade-in packet from the authenticated review UI.",
+        "tags": [
+          "review"
+        ],
+        "parameters": [
+          {
+            "name": "tradeCaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PacketResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contract validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Sidecar error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-api-version": "trade-in-sidecar/v1",
+        "x-stable-tool-name": "trade_case_review_packet"
+      }
+    },
     "/review/cases/{tradeCaseId}/actions": {
       "post": {
         "operationId": "trade_in_review_action",
@@ -12827,6 +12890,7 @@
     "trade_case_packet",
     "trade_case_review_queue",
     "trade_case_review_get",
+    "trade_case_review_packet",
     "trade_case_review_action"
   ]
 }

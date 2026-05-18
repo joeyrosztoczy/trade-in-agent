@@ -75,6 +75,16 @@ for (const behavior of ["copy_packet", "download_packet", "generate_packet", "da
   }
 }
 
+if (demo.includes("Premier / Stotz Used Equipment") || demo.includes("Premier-Stotz Trade Desk")) {
+  throw new Error("deployment-specific branding must not use the mixed Premier/Stotz label");
+}
+
+for (const behavior of ["currentDeploymentBrand", "ti-logout-button", "ti-logout-button__icon"]) {
+  if (!demo.includes(behavior) && !allCss.includes(behavior)) {
+    throw new Error(`deployment UI is missing ${behavior}`);
+  }
+}
+
 const app = {
   _html: "",
   addEventListener() {},

@@ -266,11 +266,12 @@ https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
 The production route should be same-origin:
 
 - `GET /trade-review/*` serves static files from `/var/www/trade-in-review-ui`.
-- `GET/POST /review/*` is reverse-proxied to `127.0.0.1:8788`.
-- Caddy applies temporary Basic Auth to both `/trade-review/*` and `/review/*`.
+- `GET /auth/*` is reverse-proxied to `127.0.0.1:8788`.
+- `GET/POST /review/*` is reverse-proxied to `127.0.0.1:8788` and authorized by the sidecar session layer.
+- Caddy uses `/auth/verify` as a forward-auth gate for `/trade-review/*`.
 - The sidecar should keep `CORS_ALLOW_ORIGIN` set to the public HTTPS origin.
 
-Do not commit Basic Auth plaintext passwords or Caddy hashes.
+Do not commit Entra client secrets, session secrets, Basic Auth passwords, Caddy hashes, OpenAI API keys, SSH private keys, Azure certs, or generated SSH config files.
 
 Publish the static UI bundle after each app deploy:
 
@@ -283,26 +284,31 @@ Example Caddy route shape in `/etc/caddy/conf.d/trade-in-review-ui.caddy`:
 ```caddyfile
 redir /trade-review /trade-review/ 308
 
+@auth path /auth/*
+handle @auth {
+  reverse_proxy 127.0.0.1:8788
+}
+
 @tradeReviewUi path /trade-review/*
 handle @tradeReviewUi {
-  basic_auth {
-    stotz-review <caddy-bcrypt-hash>
-  }
-  uri strip_prefix /trade-review
-  root * /var/www/trade-in-review-ui
-  file_server
-  header {
-    X-Content-Type-Options nosniff
-    Referrer-Policy same-origin
-    X-Frame-Options DENY
+  route {
+    forward_auth 127.0.0.1:8788 {
+      uri /auth/verify
+      header_up X-Forwarded-Uri {uri}
+    }
+    uri strip_prefix /trade-review
+    root * /var/www/trade-in-review-ui
+    header {
+      X-Content-Type-Options nosniff
+      Referrer-Policy same-origin
+      X-Frame-Options DENY
+    }
+    file_server
   }
 }
 
 @tradeReviewApi path /review/*
 handle @tradeReviewApi {
-  basic_auth {
-    stotz-review <caddy-bcrypt-hash>
-  }
   reverse_proxy 127.0.0.1:8788
 }
 ```
@@ -317,11 +323,12 @@ Then verify:
 
 ```bash
 curl -I https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
-curl -u "$USER:$PASSWORD" -I https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/trade-review/
-curl -u "$USER:$PASSWORD" https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/review/cases?limit=1
+curl -sS https://stotz-sales-prod-wus2-8b38e2ec.westus2.cloudapp.azure.com/review/cases?limit=1
 ```
 
-This Basic Auth gate is temporary. Replace it with Microsoft Entra OAuth/OIDC under [Milestone 7](milestone-review-ui-entra-auth.md).
+Expected: unauthenticated `/trade-review/` redirects to `/auth/login`, and unauthenticated `/review/cases` returns `401` with a login URL. Full setup, callback URLs, allow lists, and QA checks are in [docs/review-ui-entra-auth-runbook.md](review-ui-entra-auth-runbook.md).
+
+Production closeout on May 18, 2026 verified the Stotz callback with `joeyr@stotzeq.com`, confirmed Basic Auth is removed, and confirmed the production UI displays `Stotz Used Equipment` with a visible sign-out control. The full closeout record is in [docs/qa/m7-entra-auth-closeout-2026-05-18.md](qa/m7-entra-auth-closeout-2026-05-18.md).
 
 ## Verification
 

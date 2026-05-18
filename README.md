@@ -72,6 +72,9 @@ Supporting docs:
 - M4: [docs/milestone-demo-valuation-recon.md](docs/milestone-demo-valuation-recon.md) specifies the feature-flagged demo valuation and reconditioning estimate adapter.
 - M5: [docs/milestone-async-evidence-processing.md](docs/milestone-async-evidence-processing.md) specifies the async evidence processing and field acknowledgement milestone.
 - M6: [docs/review-ui-design-system.md](docs/review-ui-design-system.md) specifies the review UI foundation and design system milestone.
+- M6.1: [docs/milestone-review-ui-production-polish.md](docs/milestone-review-ui-production-polish.md) specifies the production reviewer workbench polish milestone.
+- M7: [docs/milestone-review-ui-entra-auth.md](docs/milestone-review-ui-entra-auth.md) specifies the Microsoft Entra OAuth/OIDC review UI authentication milestone.
+- M7 QA: [docs/qa/m7-entra-auth-closeout-2026-05-18.md](docs/qa/m7-entra-auth-closeout-2026-05-18.md) records the Stotz and Premier production closeout verification.
 - [docs/qa/initial-user-qa-summary.md](docs/qa/initial-user-qa-summary.md) summarizes the first realistic sales-rep and used-team QA run.
 - [docs/qa/realistic-combine-media-sources.md](docs/qa/realistic-combine-media-sources.md) lists the public combine photo/video sources used by the QA runner.
 - [docs/qa/stotz-sales-live-replay-2026-05-06.md](docs/qa/stotz-sales-live-replay-2026-05-06.md) records the Stotz Sales VM deployment and Teams replay path.
