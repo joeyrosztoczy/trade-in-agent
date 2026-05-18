@@ -334,8 +334,93 @@
     return item?.packet?.markdown || item?.packet?.preview || "";
   }
 
+  function currentRoute() {
+    const raw = String(window.location.hash || "").replace(/^#/, "");
+    if (!raw) return { view: "queue", section: null, requestedId: null };
+    if (raw.startsWith("case/")) {
+      const parts = raw.split("/");
+      return {
+        view: "case",
+        requestedId: decodeURIComponent(parts[1] || ""),
+        section: parts[2] || null
+      };
+    }
+    if (["overview-panel", "evidence-panel", "valuation-panel", "packet-panel", "history-panel"].includes(raw)) {
+      return { view: "case", requestedId: selectedId, section: raw.replace("-panel", "") };
+    }
+    return { view: "queue", section: null, requestedId: null };
+  }
+
+  function caseHref(itemOrId, section = null) {
+    const id = typeof itemOrId === "string" ? itemOrId : itemOrId?.id;
+    if (!id) return "#";
+    return `#case/${encodeURIComponent(id)}${section ? `/${section}` : ""}`;
+  }
+
+  function findCaseByRouteId(requestedId) {
+    if (!requestedId) return null;
+    return data.cases.find((item) => item.id === requestedId || item.caseNumber === requestedId) || null;
+  }
+
+  function isCaseRoute() {
+    return currentRoute().view === "case";
+  }
+
+  function syncSelectionFromRoute() {
+    const route = currentRoute();
+    if (route.view !== "case") return route;
+    const routedCase = findCaseByRouteId(route.requestedId);
+    if (routedCase) selectedId = routedCase.id;
+    if (!selectedId && data.cases[0]) selectedId = data.cases[0].id;
+    return route;
+  }
+
+  function scrollToRouteSection(section) {
+    const sectionId = {
+      overview: "overview-panel",
+      evidence: "evidence-panel",
+      valuation: "valuation-panel",
+      packet: "packet-panel",
+      history: "history-panel"
+    }[section || "overview"];
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(sectionId);
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function goToQueue() {
+    selectedEvidenceId = null;
+    if (window.location.hash) {
+      window.location.hash = "";
+    } else {
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function goToCase(id, section = null) {
+    selectedId = id;
+    selectedEvidenceId = null;
+    const nextHash = caseHref(id, section);
+    if (window.location.hash === nextHash) {
+      render();
+      if (!error) loadDetail(id);
+      if (section) scrollToRouteSection(section);
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    window.location.hash = nextHash;
+  }
+
   function renderTopbar() {
     const brand = currentDeploymentBrand();
+    const route = currentRoute();
+    const item = selectedCase();
+    const caseId = item?.id || selectedId;
+    const isCase = route.view === "case";
+    const activeSection = isCase ? route.section || "evidence" : null;
     return `
       <header class="ti-topbar">
         <div class="ti-brand">
@@ -346,10 +431,10 @@
           </div>
         </div>
         <nav class="ti-nav" aria-label="Review navigation">
-          <a class="ti-nav__item" aria-current="page" href="#">Trade Queue</a>
-          <a class="ti-nav__item" href="#evidence-panel">Evidence</a>
-          <a class="ti-nav__item" href="#packet-panel">Packet</a>
-          <a class="ti-nav__item" href="#history-panel">History</a>
+          <a class="ti-nav__item" ${!isCase ? 'aria-current="page"' : ""} href="#">Trade Queue</a>
+          <a class="ti-nav__item" ${activeSection === "evidence" ? 'aria-current="page"' : ""} href="${caseHref(caseId, "evidence")}">Evidence</a>
+          <a class="ti-nav__item" ${activeSection === "packet" ? 'aria-current="page"' : ""} href="${caseHref(caseId, "packet")}">Packet</a>
+          <a class="ti-nav__item" ${activeSection === "history" ? 'aria-current="page"' : ""} href="${caseHref(caseId, "history")}">History</a>
         </nav>
         <div class="ti-topbar__right">
           ${badge(loading ? "Syncing" : error ? "Demo fallback" : data.user.period, error ? "watch" : "info")}
@@ -398,6 +483,194 @@
           </div>
         `).join("")}
       </section>
+    `;
+  }
+
+  function renderQueueScreen() {
+    return `
+      ${renderPagehead()}
+      ${renderKpis()}
+      ${renderSystemBanner()}
+      <main class="queue-screen">
+        ${renderQueue()}
+      </main>
+    `;
+  }
+
+  function renderCaseHeader(item) {
+    if (!item) return "";
+    return `
+      <section class="case-hero" aria-labelledby="case-title">
+        <div class="case-hero__topline">
+          <button class="ti-button case-back" type="button" data-nav-queue>Back to queue</button>
+          <div class="case-hero__badges">
+            ${badge(item.route, toneForStatus(item))}
+            ${riskChip(item.risk)}
+            ${badge(evidenceQueueLabel(item), "info")}
+          </div>
+        </div>
+        <div class="case-hero__body">
+          <div>
+            <div class="ti-eyebrow">${escapeHtml(item.caseNumber)}</div>
+            <h1 id="case-title" class="ti-title">${escapeHtml(item.unit)} <em>MY ${escapeHtml(item.modelYear)}</em></h1>
+            <p class="detail-subtitle">SN ${escapeHtml(item.serial)} / ${escapeHtml(item.hours)} / ${escapeHtml(item.type)}</p>
+          </div>
+          <div class="case-hero__meta" aria-label="Selected case summary">
+            <div class="ti-meta"><span class="ti-meta__label">Trade posture</span><span class="ti-meta__value">${formatMoney(item.proposedTrade)}</span></div>
+            <div class="ti-meta"><span class="ti-meta__label">Recon</span><span class="ti-meta__value">${formatMoney(item.reconBudget)}</span></div>
+            <div class="ti-meta"><span class="ti-meta__label">Stage</span><span class="ti-meta__value">${escapeHtml(item.stage)}</span></div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCaseTabs(item) {
+    if (!item) return "";
+    const route = currentRoute();
+    const tabs = [
+      ["overview", "Overview"],
+      ["evidence", "Evidence"],
+      ["valuation", "Valuation"],
+      ["packet", "Packet"],
+      ["history", "History"]
+    ];
+    const activeSection = route.section || "evidence";
+    return `
+      <nav class="case-tabs" aria-label="Case review sections">
+        ${tabs.map(([section, label]) => `
+          <a class="case-tabs__item" href="${caseHref(item.id, section)}" ${activeSection === section ? 'aria-current="page"' : ""}>${escapeHtml(label)}</a>
+        `).join("")}
+      </nav>
+    `;
+  }
+
+  function renderReadoutPanel(item) {
+    return `
+      <section class="ti-panel summary-panel case-readout-panel" aria-labelledby="summary-title">
+        <div class="ti-section-head">
+          <h2 id="summary-title" class="ti-section-title">Reviewer readout</h2>
+          ${badge(item.confidence + " confidence", toneForRisk(item.risk))}
+        </div>
+        <p class="summary-copy">${escapeHtml(item.summary)}</p>
+        ${item.sourceUrl ? `<p class="summary-copy"><a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Source listing</a></p>` : ""}
+      </section>
+    `;
+  }
+
+  function renderDecisionPanel(item) {
+    return `
+      <section class="ti-panel decision-box case-decision-panel" aria-label="Reviewer decision controls">
+        <label class="review-note">
+          <span>Reviewer note</span>
+          <textarea id="review-note" rows="3" placeholder="Add context for sales, used team, or technician handoff"></textarea>
+        </label>
+        <div class="detail-actions">
+          <button class="ti-button" data-action="hold_for_technician" type="button" ${pendingAction ? "disabled" : ""}>Hold</button>
+          <button class="ti-button" data-action="request_more_evidence" type="button" ${pendingAction ? "disabled" : ""}>Request evidence</button>
+          <button class="ti-button" data-variant="primary" data-action="approve_packet" type="button" ${pendingAction || !canApprovePacket() ? "disabled" : ""}>Approve packet</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCaseOverviewPanel(item) {
+    const rangeMark = item.lowValue != null && item.highValue != null && item.proposedTrade != null && item.highValue !== item.lowValue
+      ? Math.min(85, Math.max(12, Math.round(((item.proposedTrade - item.lowValue) / (item.highValue - item.lowValue)) * 100)))
+      : 50;
+
+    return `
+      <section id="overview-panel" class="ti-panel case-overview-panel" aria-labelledby="overview-title">
+        <div class="detail-panel__head">
+          <span class="detail-panel__case">${escapeHtml(item.caseNumber)}</span>
+          ${badge(item.route, toneForStatus(item))}
+        </div>
+        <div class="detail-panel__body">
+          <h2 id="overview-title" class="detail-title">${escapeHtml(item.unit)} - MY ${escapeHtml(item.modelYear)}</h2>
+          <p class="detail-subtitle">SN ${escapeHtml(item.serial)} / ${escapeHtml(item.hours)} / ${escapeHtml(item.type)}</p>
+          ${renderWorkflow(item)}
+
+          <div class="spec-grid">
+            ${item.specs.map(([label, value]) => `
+              <div class="ti-field">
+                <span class="ti-label">${escapeHtml(label)}</span>
+                <span class="ti-value">${escapeHtml(value)}</span>
+              </div>
+            `).join("")}
+          </div>
+
+          <div id="valuation-panel" class="value-block">
+            <div>
+              <div class="ti-label">Demo trade posture</div>
+              <div class="value-block__amount"><span>$</span>${formatMoney(item.proposedTrade).replace("$", "")}</div>
+            </div>
+            <div class="range-track" style="--range-start:18%; --range-end:22%; --range-mark:${rangeMark}%">
+              <div class="range-track__band"></div>
+              <div class="range-track__mark"></div>
+            </div>
+            <div class="range-labels">
+              <span>Low ${formatMoney(item.lowValue)}</span>
+              <span>Recon ${formatMoney(item.reconBudget)}</span>
+              <span>High ${formatMoney(item.highValue)}</span>
+            </div>
+          </div>
+
+          <div class="signal-grid" aria-label="Risk factor breakdown">
+            <div class="ti-label">Risk factor breakdown</div>
+            ${item.riskFactors.map(([label, value, tone]) => `
+              <div class="signal-row">
+                <span class="signal-row__name">${escapeHtml(label)}</span>
+                ${meter(value, tone)}
+              </div>
+            `).join("")}
+          </div>
+
+          <div class="review-lane" aria-label="Reviewer status">
+            ${item.reviewLines.map((line) => `
+              <div class="review-line">
+                <span class="review-line__label">${escapeHtml(line.label)}</span>
+                ${badge(line.value, line.tone)}
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCaseScreen(item) {
+    if (loading && !hasLoadedQueue) {
+      return `
+        <main class="case-screen">
+          ${renderDetailSkeleton()}
+        </main>
+      `;
+    }
+    if (!item) {
+      return `
+        <main class="case-screen">
+          <section class="ti-panel summary-panel"><p class="summary-copy">No review case selected.</p></section>
+        </main>
+      `;
+    }
+    return `
+      ${renderSystemBanner()}
+      ${renderCaseHeader(item)}
+      ${renderCaseTabs(item)}
+      <main class="case-screen" id="review-detail-panel" tabindex="-1">
+        <div class="case-top-grid">
+          ${renderEvidencePanel(item)}
+          <div class="case-side-stack">
+            ${renderReadoutPanel(item)}
+            ${renderDecisionPanel(item)}
+          </div>
+        </div>
+        <div class="case-section-stack">
+          ${renderCaseOverviewPanel(item)}
+          ${renderPacketPanel(item)}
+          ${renderActionsPanel(item)}
+        </div>
+      </main>
     `;
   }
 
@@ -870,25 +1143,20 @@
       app.innerHTML = renderAccessDenied();
       return;
     }
+    const route = syncSelectionFromRoute();
     const item = selectedCase();
     const brand = currentDeploymentBrand();
     try {
       app.innerHTML = `
         <div class="review-shell">
           ${renderTopbar()}
-          ${renderPagehead()}
-          ${renderKpis()}
-          ${renderSystemBanner()}
-          <main class="review-main">
-            <div class="review-main__left">${renderQueue()}</div>
-            <div id="review-detail-panel" class="review-main__right" tabindex="-1">${renderDetail(item)}</div>
-          </main>
+          ${route.view === "case" ? renderCaseScreen(item) : renderQueueScreen()}
           <footer class="review-footnote">
             <span>Used Equipment Review Ops</span>
             <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / ${escapeHtml(brand.name)} Trade Desk ${APP_VERSION}</span>
           </footer>
         </div>
-        ${renderEvidenceModal(item)}
+        ${route.view === "case" ? renderEvidenceModal(item) : ""}
         ${renderToast()}
       `;
     } catch (err) {
@@ -904,18 +1172,28 @@
       const response = await fetch(apiUrl("/review/cases?limit=100"), { credentials: "same-origin" });
       if (!response.ok) throw new Error(`Sidecar returned ${response.status}`);
       data = normalizeDataset(await response.json());
-      selectedId = data.cases.some((item) => item.id === selectedId) ? selectedId : data.cases[0]?.id || null;
+      const route = currentRoute();
+      const routedCase = route.view === "case" ? findCaseByRouteId(route.requestedId) : null;
+      selectedId = routedCase?.id || (data.cases.some((item) => item.id === selectedId) ? selectedId : data.cases[0]?.id || null);
       error = null;
       hasLoadedQueue = true;
     } catch (err) {
       data = normalizeDataset(fallbackData);
-      selectedId = data.cases[0]?.id || null;
+      const route = currentRoute();
+      const routedCase = route.view === "case" ? findCaseByRouteId(route.requestedId) : null;
+      selectedId = routedCase?.id || data.cases[0]?.id || null;
       error = `Sidecar unavailable: ${err.message}`;
       hasLoadedQueue = true;
     } finally {
       loading = false;
       render();
-      if (!error && selectedId) loadDetail(selectedId);
+      const route = currentRoute();
+      if (!error && selectedId && route.view === "case") {
+        loadDetail(selectedId).then(() => {
+          if (route.section) scrollToRouteSection(route.section);
+          else window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
     }
   }
 
@@ -1110,7 +1388,7 @@
         if (visible.length && !visible.some((item) => item.id === selectedId)) {
           selectedId = visible[0].id;
           selectedEvidenceId = null;
-          if (!error) loadDetail(selectedId);
+          if (!error && isCaseRoute()) loadDetail(selectedId);
         }
         render();
         refocusSearch();
@@ -1148,6 +1426,11 @@
         return;
       }
 
+      if (event.target.closest("[data-nav-queue]")) {
+        goToQueue();
+        return;
+      }
+
       const exportButton = event.target.closest("[data-export]");
       if (exportButton) {
         if (exportButton.dataset.export === "copy_packet") copyPacket();
@@ -1176,11 +1459,7 @@
 
       const caseButton = event.target.closest("[data-case-id]");
       if (caseButton) {
-        selectedId = caseButton.dataset.caseId;
-        selectedEvidenceId = null;
-        render();
-        if (!error) loadDetail(selectedId);
-        scrollDetailIntoViewOnMobile();
+        goToCase(caseButton.dataset.caseId);
         return;
       }
 
@@ -1191,7 +1470,7 @@
         if (visible.length && !visible.some((item) => item.id === selectedId)) {
           selectedId = visible[0].id;
           selectedEvidenceId = null;
-          if (!error) loadDetail(selectedId);
+          if (!error && isCaseRoute()) loadDetail(selectedId);
         }
         render();
       }
@@ -1199,6 +1478,20 @@
       fatalError = err;
       render();
     }
+  });
+
+  window.addEventListener("hashchange", () => {
+    selectedEvidenceId = null;
+    const route = syncSelectionFromRoute();
+    render();
+    if (route.view === "case" && selectedId && !error) {
+      loadDetail(selectedId).then(() => {
+        if (route.section) scrollToRouteSection(route.section);
+        else window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
   window.addEventListener("error", (event) => {
