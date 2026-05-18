@@ -24,12 +24,18 @@ import {
 import { closePool } from './db.js';
 import { API_VERSION, ContractSchemas } from './contracts/index.js';
 import { validateRequestBody, validateResponseBody } from './http/validation.js';
+import {
+  buildAuthenticatedReviewActionInput,
+  handleAuthRoute,
+  isAuthRoute,
+  requireReviewAuth
+} from './auth/index.js';
 
 const PORT = Number(process.env.PORT || 8788);
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': process.env.CORS_ALLOW_ORIGIN || '*',
   'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-CSRF-Token'
 };
 
 function send(res, status, body, headers = {}, responseSchema = null) {
@@ -81,6 +87,10 @@ export function createServer() {
 
       if (req.method === 'OPTIONS') {
         return send(res, 204, '');
+      }
+
+      if (isAuthRoute(url.pathname)) {
+        return handleAuthRoute(req, res, url);
       }
 
       if (req.method === 'GET' && url.pathname === '/health') {
@@ -183,6 +193,8 @@ export function createServer() {
       }
 
       if (parts[0] === 'review' && parts.length === 2 && parts[1] === 'cases' && req.method === 'GET') {
+        const auth = await requireReviewAuth(req, url);
+        if (!auth.ok) return send(res, auth.status, { ...auth.body, requestId });
         const reviewCases = await listReviewCases({
           includeArchived: url.searchParams.get('includeArchived') === 'true',
           limit: url.searchParams.get('limit') || 100
@@ -191,13 +203,27 @@ export function createServer() {
       }
 
       if (parts[0] === 'review' && parts.length === 3 && parts[1] === 'cases' && req.method === 'GET') {
+        const auth = await requireReviewAuth(req, url);
+        if (!auth.ok) return send(res, auth.status, { ...auth.body, requestId });
         const reviewCase = await getReviewCase(parts[2]);
         if (!reviewCase) return send(res, 404, { error: 'Review case not found', requestId });
         return send(res, 200, reviewCase, {}, ContractSchemas.ReviewCaseDetailResponse);
       }
 
+      if (parts[0] === 'review' && parts.length === 4 && parts[1] === 'cases' && parts[3] === 'packet' && req.method === 'POST') {
+        const auth = await requireReviewAuth(req, url, { requireCsrf: true });
+        if (!auth.ok) return send(res, auth.status, { ...auth.body, requestId });
+        const packet = await generatePacket(parts[2]);
+        if (!packet) return send(res, 404, { error: 'Review case not found', requestId });
+        return send(res, 201, packet, {}, ContractSchemas.PacketResponse);
+      }
+
       if (parts[0] === 'review' && parts.length === 4 && parts[1] === 'cases' && parts[3] === 'actions' && req.method === 'POST') {
-        const reviewCase = await recordReviewAction(parts[2], await readContractJson(req, ContractSchemas.ReviewActionRequest));
+        const body = await readContractJson(req, ContractSchemas.ReviewActionRequest);
+        const actionType = body.actionType || body.action_type || 'note';
+        const auth = await requireReviewAuth(req, url, { actionType, requireCsrf: true });
+        if (!auth.ok) return send(res, auth.status, { ...auth.body, requestId });
+        const reviewCase = await recordReviewAction(parts[2], buildAuthenticatedReviewActionInput(body, auth));
         if (!reviewCase) return send(res, 404, { error: 'Review case not found', requestId });
         return send(res, 201, { ok: true, case: reviewCase }, {}, ContractSchemas.ReviewActionResponse);
       }

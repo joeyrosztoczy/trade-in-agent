@@ -1,8 +1,19 @@
 (function () {
-  const APP_VERSION = "v0.4";
+  const APP_VERSION = "v0.4.1";
   const fallbackData = window.TradeReviewDemoData;
   const sidecarUrl = resolveSidecarUrl();
   const app = document.getElementById("app");
+  let auth = {
+    checked: false,
+    required: false,
+    authenticated: false,
+    accessDenied: false,
+    user: null,
+    csrfToken: null,
+    logoutUrl: "/auth/logout",
+    deployment: null,
+    tenantLabel: null
+  };
   let data = normalizeDataset(fallbackData);
   let selectedId = data.cases[0]?.id || null;
   let activeFilter = "all";
@@ -15,15 +26,6 @@
   let pendingAction = null;
   let selectedEvidenceId = null;
   let toast = null;
-  let auth = {
-    checked: false,
-    required: false,
-    authenticated: false,
-    accessDenied: false,
-    user: null,
-    csrfToken: null,
-    logoutUrl: "/auth/logout"
-  };
 
   function resolveSidecarUrl() {
     if (window.TRADE_REVIEW_SIDECAR_URL) return String(window.TRADE_REVIEW_SIDECAR_URL).replace(/\/$/, "");
@@ -150,6 +152,29 @@
       name: displayName,
       initials: initialsFor(displayName),
       period: auth.required ? humanize(auth.user.roles?.slice(-1)[0] || "reviewer") : "Local review"
+    };
+  }
+
+  function currentDeploymentBrand() {
+    const raw = String(auth.tenantLabel || auth.deployment || auth.user?.deployment || "").trim();
+    const host = String(window.location.hostname || "").toLowerCase();
+    const normalized = raw.toLowerCase();
+    let name = "";
+
+    if (normalized.includes("stotz") || host.includes("stotz")) {
+      name = "Stotz";
+    } else if (normalized.includes("premier") || host.includes("premier")) {
+      name = "Premier";
+    } else if (raw) {
+      name = humanize(raw);
+    } else {
+      name = "Used Equipment";
+    }
+
+    return {
+      name,
+      title: name === "Used Equipment" ? name : `${name} Used Equipment`,
+      mark: name.slice(0, 1).toUpperCase() || "U"
     };
   }
 
@@ -310,12 +335,13 @@
   }
 
   function renderTopbar() {
+    const brand = currentDeploymentBrand();
     return `
       <header class="ti-topbar">
         <div class="ti-brand">
-          <div class="ti-brand__mark">P</div>
+          <div class="ti-brand__mark">${escapeHtml(brand.mark)}</div>
           <div>
-            <span class="ti-brand__name">Premier / Stotz Used Equipment</span>
+            <span class="ti-brand__name">${escapeHtml(brand.title)}</span>
             <span class="ti-brand__meta">Trade Desk / Review Ops</span>
           </div>
         </div>
@@ -329,8 +355,18 @@
           ${badge(loading ? "Syncing" : error ? "Demo fallback" : data.user.period, error ? "watch" : "info")}
           <span>${escapeHtml(data.user.name)}</span>
           <div class="ti-avatar" aria-label="${escapeHtml(data.user.name)}">${escapeHtml(data.user.initials)}</div>
+          ${auth.required ? renderLogoutButton() : ""}
         </div>
       </header>
+    `;
+  }
+
+  function renderLogoutButton() {
+    return `
+      <button class="ti-button ti-logout-button" type="button" data-auth-logout aria-label="Sign out">
+        <span class="ti-logout-button__icon" aria-hidden="true"></span>
+        <span class="ti-logout-button__label">Sign out</span>
+      </button>
     `;
   }
 
@@ -704,7 +740,7 @@
             <div class="detail-actions">
               <button class="ti-button" data-action="hold_for_technician" type="button" ${pendingAction ? "disabled" : ""}>Hold</button>
               <button class="ti-button" data-action="request_more_evidence" type="button" ${pendingAction ? "disabled" : ""}>Request evidence</button>
-              <button class="ti-button" data-variant="primary" data-action="approve_packet" type="button" ${pendingAction ? "disabled" : ""}>Approve packet</button>
+              <button class="ti-button" data-variant="primary" data-action="approve_packet" type="button" ${pendingAction || !canApprovePacket() ? "disabled" : ""}>Approve packet</button>
             </div>
           </div>
         </section>
@@ -812,12 +848,30 @@
     `;
   }
 
+  function renderAccessDenied() {
+    return `
+      <div class="review-shell">
+        ${renderTopbar()}
+        <section class="fatal-panel" role="alert">
+          <h1>Access denied</h1>
+          <p>${escapeHtml(auth.error || "Your Microsoft account is not on the review allow list for this deployment.")}</p>
+          <button class="ti-button" type="button" data-auth-logout>Sign out</button>
+        </section>
+      </div>
+    `;
+  }
+
   function render() {
     if (fatalError) {
       app.innerHTML = renderFatalError(fatalError);
       return;
     }
+    if (auth.accessDenied) {
+      app.innerHTML = renderAccessDenied();
+      return;
+    }
     const item = selectedCase();
+    const brand = currentDeploymentBrand();
     try {
       app.innerHTML = `
         <div class="review-shell">
@@ -831,7 +885,7 @@
           </main>
           <footer class="review-footnote">
             <span>Used Equipment Review Ops</span>
-            <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / Premier-Stotz Trade Desk ${APP_VERSION}</span>
+            <span>${escapeHtml(error ? "Static fallback" : "Live sidecar")} / ${escapeHtml(brand.name)} Trade Desk ${APP_VERSION}</span>
           </footer>
         </div>
         ${renderEvidenceModal(item)}
@@ -847,7 +901,7 @@
     loading = true;
     render();
     try {
-      const response = await fetch(apiUrl("/review/cases?limit=100"));
+      const response = await fetch(apiUrl("/review/cases?limit=100"), { credentials: "same-origin" });
       if (!response.ok) throw new Error(`Sidecar returned ${response.status}`);
       data = normalizeDataset(await response.json());
       selectedId = data.cases.some((item) => item.id === selectedId) ? selectedId : data.cases[0]?.id || null;
@@ -865,9 +919,50 @@
     }
   }
 
+  async function loadAuth() {
+    try {
+      const response = await fetch(apiUrl("/auth/me"), { credentials: "same-origin" });
+      const body = await response.json().catch(() => ({}));
+      if (response.status === 401 && body.loginUrl) {
+        window.location.assign(apiUrl(body.loginUrl));
+        return false;
+      }
+      if (response.status === 403) {
+        auth = {
+          ...auth,
+          checked: true,
+          required: true,
+          authenticated: false,
+          accessDenied: true,
+          error: body.error || "Your Microsoft account is not allowed for this review deployment."
+        };
+        render();
+        return false;
+      }
+      if (!response.ok) throw new Error(`Auth returned ${response.status}`);
+      auth = {
+        checked: true,
+        required: Boolean(body.authRequired),
+        authenticated: Boolean(body.authenticated),
+        accessDenied: false,
+        user: body.user || null,
+        csrfToken: body.csrfToken || null,
+        logoutUrl: body.logoutUrl || "/auth/logout",
+        deployment: body.deployment || body.user?.deployment || null,
+        tenantLabel: body.tenantLabel || null
+      };
+      data = normalizeDataset(data);
+      render();
+      return true;
+    } catch {
+      auth = { ...auth, checked: true, required: false, authenticated: false, accessDenied: false };
+      return true;
+    }
+  }
+
   async function loadDetail(id) {
     try {
-      const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(id)}`));
+      const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(id)}`), { credentials: "same-origin" });
       if (!response.ok) throw new Error(`Detail returned ${response.status}`);
       const detail = normalizeCase(await response.json());
       data.cases = data.cases.map((item) => item.id === id ? { ...item, ...detail } : item);
@@ -883,7 +978,11 @@
     pendingAction = "generate_packet";
     render();
     try {
-      const response = await fetch(apiUrl(`/trade-cases/${encodeURIComponent(item.id)}/packet`), { method: "POST" });
+      const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(item.id)}/packet`), {
+        method: "POST",
+        headers: authHeaders(),
+        credentials: "same-origin"
+      });
       if (!response.ok) throw new Error(`Packet returned ${response.status}`);
       await loadDetail(item.id);
       showToast("Packet generated for the selected ticket.", "good");
@@ -913,10 +1012,10 @@
     try {
       const response = await fetch(apiUrl(`/review/cases/${encodeURIComponent(item.id)}/actions`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(true),
+        credentials: "same-origin",
         body: JSON.stringify({
           actionType,
-          reviewer: "review-ui",
           note: noteFromUi || notes[actionType] || "Reviewer action from review UI.",
           packetId: item.packet?.id || null
         })
@@ -1040,7 +1139,12 @@
         fatalError = null;
         error = null;
         hasLoadedQueue = false;
-        loadQueue();
+        boot();
+        return;
+      }
+
+      if (event.target.closest("[data-auth-logout]")) {
+        window.location.assign(apiUrl(auth.logoutUrl || "/auth/logout"));
         return;
       }
 
@@ -1108,5 +1212,10 @@
   });
 
   render();
-  loadQueue();
+  boot();
+
+  async function boot() {
+    const canLoad = await loadAuth();
+    if (canLoad) await loadQueue();
+  }
 })();

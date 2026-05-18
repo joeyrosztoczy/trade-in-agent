@@ -147,6 +147,22 @@ Milestone 7 is complete when:
 6. Deployment secrets are outside git.
 7. The Stotz production runbook includes setup, rotation, QA, and rollback steps.
 
+## Closeout Status
+
+Closed out on May 18, 2026 on branch `codex/entra-auth`.
+
+Production verification:
+
+- Stotz production deployed and callback-tested with `joeyr@stotzeq.com`.
+- Premier production deployed and callback-tested with `joey.rosztoczy@premierequipment.ca`.
+- Both production hosts redirect unauthenticated `/trade-review/` requests to Microsoft Entra login.
+- Both production hosts reject unauthenticated `/review/*` API calls with `401`.
+- Both production sidecar and worker services are active; the old Basic Auth era app service is disabled.
+- Review UI static assets are cache-busted and show deployment-specific branding.
+- Reviewer-only users can view/record normal review actions; manager/admin approval remains disabled until those allow lists are populated.
+
+Detailed closeout evidence is recorded in [qa/m7-entra-auth-closeout-2026-05-18.md](qa/m7-entra-auth-closeout-2026-05-18.md).
+
 ## Out Of Scope
 
 - Dynamics/JDDO authorization model

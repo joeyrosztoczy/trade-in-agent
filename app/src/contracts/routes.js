@@ -199,6 +199,16 @@ export const endpointContracts = [
     successStatus: 200
   },
   {
+    operationId: 'trade_in_review_generate_packet',
+    stableToolName: 'trade_case_review_packet',
+    legacyToolName: null,
+    method: 'POST',
+    path: '/review/cases/{tradeCaseId}/packet',
+    summary: 'Generate a reviewer-facing trade-in packet from the authenticated review UI.',
+    responseSchema: 'PacketResponse',
+    successStatus: 201
+  },
+  {
     operationId: 'trade_in_review_action',
     stableToolName: 'trade_case_review_action',
     legacyToolName: null,

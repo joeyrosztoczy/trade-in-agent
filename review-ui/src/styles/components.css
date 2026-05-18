@@ -92,6 +92,57 @@
   font-weight: 700;
 }
 
+.ti-topbar__right .ti-button {
+  min-height: 2rem;
+  padding: 0 var(--ti-space-2);
+  border-color: rgba(251, 250, 245, 0.26);
+  color: var(--ti-color-ink-inverse);
+}
+
+.ti-topbar__right .ti-logout-button {
+  background: rgba(251, 250, 245, 0.08);
+}
+
+.ti-topbar__right .ti-logout-button:hover {
+  border-color: rgba(255, 222, 0, 0.72);
+  background: rgba(255, 222, 0, 0.16);
+  color: var(--ti-color-signal);
+}
+
+.ti-logout-button__icon {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  background: linear-gradient(currentColor, currentColor) 0.42rem 0.47rem / 0.46rem 0.12rem no-repeat;
+}
+
+.ti-logout-button__icon::before,
+.ti-logout-button__icon::after {
+  content: "";
+  position: absolute;
+}
+
+.ti-logout-button__icon::before {
+  left: 0.08rem;
+  top: 0.18rem;
+  width: 0.44rem;
+  height: 0.62rem;
+  border: 0.12rem solid currentColor;
+  border-right: 0;
+  border-radius: 0.08rem 0 0 0.08rem;
+}
+
+.ti-logout-button__icon::after {
+  right: 0.1rem;
+  top: 0.34rem;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-top: 0.12rem solid currentColor;
+  border-right: 0.12rem solid currentColor;
+  transform: rotate(45deg);
+}
+
 .ti-pagehead {
   display: flex;
   align-items: flex-end;
@@ -467,6 +518,18 @@
   .ti-avatar {
     width: 1.8rem;
     height: 1.8rem;
+  }
+
+  .ti-topbar__right .ti-logout-button {
+    width: 1.9rem;
+    min-width: 1.9rem;
+    height: 1.9rem;
+    min-height: 1.9rem;
+    padding: 0;
+  }
+
+  .ti-logout-button__label {
+    display: none;
   }
 
   .ti-nav {
