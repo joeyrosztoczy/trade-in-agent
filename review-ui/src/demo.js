@@ -15,6 +15,15 @@
   let pendingAction = null;
   let selectedEvidenceId = null;
   let toast = null;
+  let auth = {
+    checked: false,
+    required: false,
+    authenticated: false,
+    accessDenied: false,
+    user: null,
+    csrfToken: null,
+    logoutUrl: "/auth/logout"
+  };
 
   function resolveSidecarUrl() {
     if (window.TRADE_REVIEW_SIDECAR_URL) return String(window.TRADE_REVIEW_SIDECAR_URL).replace(/\/$/, "");
@@ -27,9 +36,10 @@
   }
 
   function normalizeDataset(payload) {
+    const user = currentUserSummary();
     if (payload?.items) {
       return {
-        user: {
+        user: user || {
           name: "Used Team",
           initials: "UT",
           period: "Live sidecar"
@@ -40,7 +50,7 @@
     }
     const fallback = payload || {};
     return {
-      user: {
+      user: user || {
         name: fallback.user?.name || "Used Team",
         initials: fallback.user?.initials || "UT",
         period: fallback.user?.period || "Static fallback"
@@ -131,6 +141,39 @@
       hour: "numeric",
       minute: "2-digit"
     });
+  }
+
+  function currentUserSummary() {
+    if (!auth.user) return null;
+    const displayName = auth.user.displayName || auth.user.name || auth.user.email || auth.user.upn || "Reviewer";
+    return {
+      name: displayName,
+      initials: initialsFor(displayName),
+      period: auth.required ? humanize(auth.user.roles?.slice(-1)[0] || "reviewer") : "Local review"
+    };
+  }
+
+  function initialsFor(value) {
+    const parts = String(value || "Reviewer").replace(/<.*>/g, "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "RV";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+
+  function hasAnyRole(roles) {
+    const current = new Set(auth.user?.roles || []);
+    return roles.some((role) => current.has(role));
+  }
+
+  function canApprovePacket() {
+    return !auth.required || hasAnyRole(["manager", "admin"]);
+  }
+
+  function authHeaders(json = false) {
+    const headers = {};
+    if (json) headers["Content-Type"] = "application/json";
+    if (auth.csrfToken) headers["X-CSRF-Token"] = auth.csrfToken;
+    return headers;
   }
 
   function toneForRisk(risk) {
@@ -292,10 +335,11 @@
   }
 
   function renderPagehead() {
+    const eyebrow = error ? "Static fallback data" : "Sidecar-backed review queue";
     return `
       <section class="ti-pagehead" aria-labelledby="review-title">
         <div>
-          <div class="ti-eyebrow">${escapeHtml(error || "Sidecar-backed review queue")}</div>
+          <div class="ti-eyebrow">${escapeHtml(eyebrow)}</div>
           <h1 id="review-title" class="ti-title">Open trade <em>review queue</em></h1>
         </div>
         <div class="ti-meta-list" aria-label="Queue metadata">
@@ -783,7 +827,7 @@
           ${renderSystemBanner()}
           <main class="review-main">
             <div class="review-main__left">${renderQueue()}</div>
-            <div class="review-main__right">${renderDetail(item)}</div>
+            <div id="review-detail-panel" class="review-main__right" tabindex="-1">${renderDetail(item)}</div>
           </main>
           <footer class="review-footnote">
             <span>Used Equipment Review Ops</span>
@@ -936,6 +980,20 @@
     }, 2600);
   }
 
+  function isMobileReviewLayout() {
+    return window.matchMedia("(max-width: 900px)").matches;
+  }
+
+  function scrollDetailIntoViewOnMobile() {
+    if (!isMobileReviewLayout()) return;
+    window.requestAnimationFrame(() => {
+      const detail = document.getElementById("review-detail-panel");
+      if (!detail) return;
+      detail.focus({ preventScroll: true });
+      detail.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   function refocusSearch() {
     window.requestAnimationFrame(() => {
       const search = document.querySelector("[data-search]");
@@ -1018,6 +1076,7 @@
         selectedEvidenceId = null;
         render();
         if (!error) loadDetail(selectedId);
+        scrollDetailIntoViewOnMobile();
         return;
       }
 
